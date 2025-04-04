@@ -1,12 +1,3 @@
-## Global Setting ####################################################
-
-# BEFORE: run setting.R
-setwd(wrkpath)
-getwd()
-# Data Path with all Nexus_Indicators
-datpath <- wrkpath %+% "data/"
-
-
 ## Load Libraries ############################################################# 
 library(readr)
 library(plyr)
@@ -73,8 +64,31 @@ x$x[which(is.na(match(x$x, y$y)))]
 spec.list<- z$z
 rm(pos,x,y,z)
 
-### 4) 
-write.csv(spec.list,"spec_list.csv", row.names = F)
+### 4) merge the two data files 
+# note: for now, the 2019 data from the old file is deleted. But we should still check once whether the two 
+# data sets are identical
+
+# create year and month column
+data_10_19$year<-year(data_10_19$StartDate);data_10_19$month<-month(data_10_19$StartDate)
+data_19_21$year<-year(data_19_21$StartDate);data_19_21$month<-month(data_19_21$StartDate)
+
+length(which(data_10_19$year==2019)); length(which(data_19_21$year==2019))
+# data is not the same - there are some columns in the old files missing...
+
+# delete the 2019 data in the old file
+data_10_19<-data_10_19[which(data_10_19$year!=2019)]
+
+# synchronise last column name
+colnames(data_19_21)[1]<-'GenSpec'
+
+# create one data file
+dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")],
+                data_19_21[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")])
+
+### 5) take all social bees - I would exclude the male bees as those are probably not contributing to pollination.
+
+
+
 
 ## Script Lili:
 m <- read.csv2(paste0(datpath,"data_raw/community_matrix_female.csv"))

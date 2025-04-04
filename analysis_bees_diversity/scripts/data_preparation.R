@@ -81,9 +81,13 @@ write.csv(spec.list,"spec_list.csv", row.names = F)
 ### 5) add taxonomic information
 path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
 traits <- read_excel(path.traits)
+#rename species name (replace '.' with ' '):
+traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
+
 
 path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
 traits_raw <- read_excel(path.traits_raw, skip=1)
+
 
 
 

@@ -88,6 +88,10 @@ traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
 path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
 traits_raw <- read_excel(path.traits_raw, skip=1)
 
+# rename colnames in traits_raw data
+colnames(traits_raw)[c(1,5,6,9, 10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
+
+
 
 
 

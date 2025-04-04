@@ -24,14 +24,6 @@ library(raster)
 library(rlang)
 library(openxlsx)
 
-# raw data: 2019-2021
-path.data_19_21 <- paste0(datpath,"data_raw/Bee_Data2019-2021_2024-08-16.xlsx")
-data_19_21 <- read_excel(path.data_19_21, sheet = "BeeData_2019-21")
-
-
-# explore data
-unique(data_19_21$Start)
-unique(data_19_21$End)
 
 
 # raw data: 2010-2019
@@ -40,12 +32,24 @@ data_10_19 <- read_excel(path.data_10_19, sheet = "Query_Bexis_work_variables_Be
 
 # refine columns
 names(data_10_19)
-data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
+data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "Season", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
 # rename Location:
 data_10_19$LocName <- str_extract(data_10_19$LocName, "\\(.*\\)")
 data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
 
+
+
+# raw data: 2019-2021
+path.data_19_21 <- paste0(datpath,"data_raw/Bee_Data2019-2021_2024-08-16.xlsx")
+data_19_21 <- read_excel(path.data_19_21, sheet = "BeeData_2019-21")
+
+#rename columns in order to merge with data_10_19:
+data_19_21  <- dplyr::rename(data_19_21, "Males" = "Male")
+data_19_21  <- dplyr::rename(data_19_21, "Females" = "Female")
+data_19_21  <- dplyr::rename(data_19_21, "LocName" = "Loc")
+data_19_21  <- dplyr::rename(data_19_21, "StartDate" = "Start")
+data_19_21  <- dplyr::rename(data_19_21, "EndDate" = "End")
 
 ## Script Lili:
 m <- read.csv2(paste0(datpath,"data_raw/community_matrix_female.csv"))

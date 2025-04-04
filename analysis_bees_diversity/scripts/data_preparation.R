@@ -36,6 +36,18 @@ data_10_19 <- read_excel("analysis_bees_diversity/data/data_raw/TERENO_bees_2010
 # refine columns in 2010-2019 data 
 data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
+# trait data
+path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
+traits <- read_excel(path.traits)
+#rename species name (replace '.' with ' '):
+traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
+
+path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
+traits_raw <- read_excel(path.traits_raw, skip=1)
+
+# rename colnames in traits_raw data
+colnames(traits_raw)[c(1,5,6,9, 10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
+
 ### 2) Synchronize colnames and Location names
 # rename Location:
 data_10_19$LocName <- str_extract(data_10_19$LocName, "\\(.*\\)")
@@ -73,25 +85,54 @@ x$x[which(is.na(match(x$x, y$y)))]
 spec.list<- z$z
 rm(pos,x,y,z)
 
-### 4) 
-write.csv(spec.list,"spec_list.csv", row.names = F)
+### 4) merge the two data files 
+# note: for now, the 2019 data from the old file is deleted. But we should still check once whether the two 
+# data sets are identical
+
+# create year and month column
+data_10_19$year<-year(data_10_19$StartDate);data_10_19$month<-month(data_10_19$StartDate)
+data_19_21$year<-year(data_19_21$StartDate);data_19_21$month<-month(data_19_21$StartDate)
+
+length(which(data_10_19$year==2019)); length(which(data_19_21$year==2019))
+# data is not the same - there are some columns in the old files missing...
+
+# delete the 2019 data in the old file
+data_10_19<-data_10_19[which(data_10_19$year!=2019)]
+
+# synchronise last column name
+colnames(data_19_21)[1]<-'GenSpec'
+
+# create one data file
+dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")],
+                data_19_21[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")])
+
+### 5) take all social bees - I would exclude the male bees as those are probably not contributing to pollination.
+communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
+
+# merging parameter showing whether males should be used or not
+dat_all$sum<-1
+dat_all$sum[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
+
+### 6) create meta-data containing all location-year combinations
 
 
+### 7) create meta-data containing all location-year-season combinations
 
-### 5) add taxonomic information
-path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
-traits <- read_excel(path.traits)
-#rename species name (replace '.' with ' '):
-traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
+dat_all$start.day<-yday(dat_all$StartDate)
+hist(dat_all$start.day) #180 is a good separation between seasons
 
+meta<- aggregate(list(dat_all$Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year), function(x){mean(x, na.rm=T)})
+meta<-meta[,1:3]; colnames(meta)<-c("LocName", "LocTrap","year")
 
-path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
-traits_raw <- read_excel(path.traits_raw, skip=1)
+meta$uniqueID<-paste0(meta$LocName, meta$LocTrap,meta$year)
 
-# rename colnames in traits_raw data
-colnames(traits_raw)[c(1,5,6,9, 10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
+# add start AND ENd days for two sampling seasons, calculate exposure period for both of them and calculate total exposure period
 
+# start creating species matrix
+cm.females<-matrix(nrow = nrow(meta), ncol=length(spec.list))
 
+# now fill the species matrix
+# create one for males, one for females, one for total abundance combined (f and m), one for total biomass
 
 
 

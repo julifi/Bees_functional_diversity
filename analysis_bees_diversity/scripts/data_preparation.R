@@ -90,6 +90,21 @@ dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "
 
 
 
+
+
+### 5) add taxonomic information
+path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
+traits <- read_excel(path.traits)
+#rename species name (replace '.' with ' '):
+traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
+
+
+path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
+traits_raw <- read_excel(path.traits_raw, skip=1)
+
+
+
+
 ## Script Lili:
 m <- read.csv2(paste0(datpath,"data_raw/community_matrix_female.csv"))
 m$site <- as.factor(m$site)

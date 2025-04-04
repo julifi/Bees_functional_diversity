@@ -78,7 +78,7 @@ write.csv(spec.list,"spec_list.csv", row.names = F)
 
 
 
-
+### 5) add taxonomic information
 path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
 traits <- read_excel(path.traits)
 

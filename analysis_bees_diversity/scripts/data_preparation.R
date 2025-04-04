@@ -51,6 +51,17 @@ data_19_21  <- dplyr::rename(data_19_21, "LocName" = "Loc")
 data_19_21  <- dplyr::rename(data_19_21, "StartDate" = "Start")
 data_19_21  <- dplyr::rename(data_19_21, "EndDate" = "End")
 
+
+
+
+path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
+traits <- read_excel(path.traits)
+
+path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
+traits_raw <- read_excel(path.traits_raw, skip=1)
+
+
+
 ## Script Lili:
 m <- read.csv2(paste0(datpath,"data_raw/community_matrix_female.csv"))
 m$site <- as.factor(m$site)

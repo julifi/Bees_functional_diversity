@@ -24,32 +24,57 @@ library(raster)
 library(rlang)
 library(openxlsx)
 
+########## A) Data preparation #########
 
+### 1) read in data
+# raw data: 2019-2021
+data_19_21 <- read_excel('analysis_bees_diversity/data/data_raw/Bee_Data2019-2021_2024-08-16.xlsx', sheet = "BeeData_2019-21")
 
 # raw data: 2010-2019
-path.data_10_19 <- paste0(datpath,"data_raw/TERENO_bees_2010-19.xlsx")
-data_10_19 <- read_excel(path.data_10_19, sheet = "Query_Bexis_work_variables_Bees")
+data_10_19 <- read_excel("analysis_bees_diversity/data/data_raw/TERENO_bees_2010-19.xlsx", sheet = "Query_Bexis_work_variables_Bees")
 
-# refine columns
-names(data_10_19)
-data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "Season", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
+# refine columns in 2010-2019 data 
+data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
+### 2) Synchronize colnames and Location names
 # rename Location:
 data_10_19$LocName <- str_extract(data_10_19$LocName, "\\(.*\\)")
 data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
 
+# rename colnames in 19-21 data
+colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "EndDate","LocTrap")
 
+### 3) Synchronize species names in the two data sets
 
-# raw data: 2019-2021
-path.data_19_21 <- paste0(datpath,"data_raw/Bee_Data2019-2021_2024-08-16.xlsx")
-data_19_21 <- read_excel(path.data_19_21, sheet = "BeeData_2019-21")
+for(i in 1:nrow(data_19_21)){pos<-which(strsplit(data_19_21$fullGenSpec[i], "")[[1]]==" ")
+                             data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
 
-#rename columns in order to merge with data_10_19:
-data_19_21  <- dplyr::rename(data_19_21, "Males" = "Male")
-data_19_21  <- dplyr::rename(data_19_21, "Females" = "Female")
-data_19_21  <- dplyr::rename(data_19_21, "LocName" = "Loc")
-data_19_21  <- dplyr::rename(data_19_21, "StartDate" = "Start")
-data_19_21  <- dplyr::rename(data_19_21, "EndDate" = "End")
+# check whether all species names in 19-21 are also there in the file before
+x<-unique(data_19_21$fullGenSpec); y<-unique(data_10_19$GenSpec)
+x<-x[order(x)]; y<-y[order(y)]
+x<-as.data.frame(x); y<-as.data.frame(y)
+
+# correct mistakes
+data_19_21$fullGenSpec[which(data_19_21$fullGenSpec==x$x[127])]<- 'Lasioglossum glabriusculum'
+data_19_21$fullGenSpec[which(data_19_21$fullGenSpec==x$x[159])]<- 'Macropis europaea'
+data_19_21$fullGenSpec[which(data_19_21$fullGenSpec==x$x[229])]<- 'Stelis odontopyga'
+
+data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[13])]<- 'Andrena coitana'
+data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[122])]<- 'Halictus leucaheneus'
+data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[277])]<- 'Stelis odontopyga'
+
+# check whether remaining mismatches are really new species in 2019-21
+z<-c(y$y, x$x[which(is.na(match(x$x, y$y)))])
+z<-z[order(z)]; z<-as.data.frame(z)
+
+x$x[which(is.na(match(x$x, y$y)))]
+# yes, seems to be the case
+
+spec.list<- z$z
+rm(pos,x,y,z)
+
+### 4) 
+write.csv(spec.list,"spec_list.csv", row.names = F)
 
 
 

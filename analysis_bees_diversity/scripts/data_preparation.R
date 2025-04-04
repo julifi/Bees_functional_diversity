@@ -24,27 +24,24 @@ library(raster)
 library(rlang)
 library(openxlsx)
 
+########## A) Data preparation #########
+
+### 1) read in data
 # raw data: 2019-2021
-path.data_19_21 <- paste0(datpath,"data_raw/Bee_Data2019-2021_2024-08-16.xlsx")
-data_19_21 <- read_excel(path.data_19_21, sheet = "BeeData_2019-21")
-
-
-# explore data
-unique(data_19_21$Start)
-unique(data_19_21$End)
-
+data_19_21 <- read_excel('analysis_bees_diversity/data/data_raw/Bee_Data2019-2021_2024-08-16.xlsx', sheet = "BeeData_2019-21")
 
 # raw data: 2010-2019
-path.data_10_19 <- paste0(datpath,"data_raw/TERENO_bees_2010-19.xlsx")
-data_10_19 <- read_excel(path.data_10_19, sheet = "Query_Bexis_work_variables_Bees")
+data_10_19 <- read_excel("analysis_bees_diversity/data/data_raw/TERENO_bees_2010-19.xlsx", sheet = "Query_Bexis_work_variables_Bees")
 
-# refine columns
-names(data_10_19)
+# refine columns in 2010-2019 data 
 data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
 # rename Location:
 data_10_19$LocName <- str_extract(data_10_19$LocName, "\\(.*\\)")
 data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
+
+# rename colnames in 19-21 data
+colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "EndDate","LocTrap")
 
 
 ## Script Lili:

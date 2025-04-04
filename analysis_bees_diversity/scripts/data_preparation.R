@@ -29,7 +29,7 @@ path.data_19_21 <- paste0(datpath,"data_raw/Bee_Data2019-2021_2024-08-16.xlsx")
 data_19_21 <- read_excel(path.data_19_21, sheet = "BeeData_2019-21")
 
 
-# explore data: 
+# explore data
 unique(data_19_21$Start)
 unique(data_19_21$End)
 

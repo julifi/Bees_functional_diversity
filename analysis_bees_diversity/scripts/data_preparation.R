@@ -37,16 +37,14 @@ data_10_19 <- read_excel("analysis_bees_diversity/data/data_raw/TERENO_bees_2010
 data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
 # trait data
-path.traits <- ("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
-traits <- read_excel(path.traits)
+traits <- read_excel("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
 #rename species name (replace '.' with ' '):
 traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
 
-path.traits_raw <- ("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx") 
-traits_raw <- read_excel(path.traits_raw, skip=1)
-
-# rename colnames in traits_raw data
-colnames(traits_raw)[c(1,5,6,9, 10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
+# traits_raw <- read_excel("analysis_bees_diversity/data/data_raw/Traits_TerenoBees_20210913_updated.xlsx", skip=1)
+# 
+# # rename colnames in traits_raw data
+# colnames(traits_raw)[c(1,5,6,9,10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
 
 ### 2) Synchronize colnames and Location names
 # rename Location:
@@ -57,7 +55,6 @@ data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
 colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "EndDate","LocTrap")
 
 ### 3) Synchronize species names in the two data sets
-
 for(i in 1:nrow(data_19_21)){pos<-which(strsplit(data_19_21$fullGenSpec[i], "")[[1]]==" ")
                              data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
 
@@ -76,6 +73,9 @@ data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[122])]<- 'Halictus leucaheneus'
 data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[277])]<- 'Stelis odontopyga'
 
 # check whether remaining mismatches are really new species in 2019-21
+x<-unique(data_19_21$fullGenSpec); y<-unique(data_10_19$GenSpec)
+x<-x[order(x)]; y<-y[order(y)]
+x<-as.data.frame(x); y<-as.data.frame(y)
 z<-c(y$y, x$x[which(is.na(match(x$x, y$y)))])
 z<-z[order(z)]; z<-as.data.frame(z)
 
@@ -85,7 +85,7 @@ x$x[which(is.na(match(x$x, y$y)))]
 spec.list<- z$z
 rm(pos,x,y,z)
 
-### 4) merge the two data files 
+### 4) merge the two data files with bee data
 # note: for now, the 2019 data from the old file is deleted. But we should still check once whether the two 
 # data sets are identical
 

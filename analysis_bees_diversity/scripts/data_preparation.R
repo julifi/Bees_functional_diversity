@@ -110,8 +110,10 @@ dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
 
 # merging parameter showing whether males should be used or not
-dat_all$sum<-1
-dat_all$sum[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
+dat_all$consider_males <-1
+dat_all$consider_males[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
+
+dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
 
 ### 6) create meta-data containing all location-year combinations
 
@@ -119,20 +121,43 @@ dat_all$sum[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
 ### 7) create meta-data containing all location-year-season combinations
 
 dat_all$start.day<-yday(dat_all$StartDate)
-hist(dat_all$start.day) #180 is a good separation between seasons
+dat_all$end.day<-yday(dat_all$EndDate)
+hist(dat_all$start.day) 
+sort(unique(dat_all$start.day)) #180 is a good separation between seasons
+dat_all$season <- ifelse(dat_all$start.day<180, 'spring', 'summer')
 
 meta<- aggregate(list(dat_all$Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year), function(x){mean(x, na.rm=T)})
 meta<-meta[,1:3]; colnames(meta)<-c("LocName", "LocTrap","year")
-
 meta$uniqueID<-paste0(meta$LocName, meta$LocTrap,meta$year)
 
-# add start AND ENd days for two sampling seasons, calculate exposure period for both of them and calculate total exposure period
 
 # start creating species matrix
-cm.females<-matrix(nrow = nrow(meta), ncol=length(spec.list))
+cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list))
+colnames(cm.base) <- spec.list
+cm.base <- cbind(meta, cm.base)
 
-# now fill the species matrix
-# create one for males, one for females, one for total abundance combined (f and m), one for total biomass
+
+### 8) create species matrices (abundance and biomass)
+
+# different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
+abundance <- aggregate(list(abundance_female = dat_all$Females,
+                       abundance_male = dat_all$Males,
+                       abundance_total = dat_all$Females_Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year, dat_all$GenSpec), function(x){sum(x, na.rm=T)})
+colnames(abundance)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
+abundance$uniqueID<-paste0(abundance$LocName, abundance$LocTrap,abundance $year)
+
+cm.ab.females <- abundance[c("uniqueID", "GenSpec", "abundance_female")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_female) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+cm.ab.males <- abundance[c("uniqueID", "GenSpec", "abundance_male")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_male) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+cm.ab.total <- abundance[c("uniqueID", "GenSpec", "abundance_total")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_total) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
 
 
 

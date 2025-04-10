@@ -56,7 +56,7 @@ colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "
 
 ### 3) Synchronize species names in the two data sets
 for(i in 1:nrow(data_19_21)){pos<-which(strsplit(data_19_21$fullGenSpec[i], "")[[1]]==" ")
-                             data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
+data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
 
 # check whether all species names in 19-21 are also there in the file before
 x<-unique(data_19_21$fullGenSpec); y<-unique(data_10_19$GenSpec)
@@ -97,7 +97,7 @@ length(which(data_10_19$year==2019)); length(which(data_19_21$year==2019))
 # data is not the same - there are some columns in the old files missing...
 
 # delete the 2019 data in the old file
-data_10_19<-data_10_19[which(data_10_19$year!=2019)]
+data_10_19<-data_10_19[which(data_10_19$year!=2019),]
 
 # synchronise last column name
 colnames(data_19_21)[1]<-'GenSpec'
@@ -106,43 +106,193 @@ colnames(data_19_21)[1]<-'GenSpec'
 dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")],
                 data_19_21[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")])
 
+# there is one sample that is associated to the wrong year, we need to correct that
+dat_all$uniqueID<-paste0(dat_all$LocTrap,dat_all$year)
+dat_all$year[which(dat_all$uniqueID=='HAR152020' & dat_all$EndDate== dat_all$EndDate[55953]
+                   & dat_all$StartDate== dat_all$StartDate[55953])]<-2021
+
 ### 5) take all social bees - I would exclude the male bees as those are probably not contributing to pollination.
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
 
 # merging parameter showing whether males should be used or not
-dat_all$consider_males <-1
-dat_all$consider_males[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
+dat_all$sum<-1
+dat_all$sum[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
 
-dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
+rm(communal)
 
 ### 6) create meta-data containing all location-year combinations
-
-
-### 7) create meta-data containing all location-year-season combinations
-
-dat_all$start.day<-yday(dat_all$StartDate)
-dat_all$end.day<-yday(dat_all$EndDate)
-hist(dat_all$start.day) 
-sort(unique(dat_all$start.day)) #180 is a good separation between seasons
-dat_all$season <- ifelse(dat_all$start.day<180, 'spring', 'summer')
-
+# create and trim the meta-data
 meta<- aggregate(list(dat_all$Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year), function(x){mean(x, na.rm=T)})
 meta<-meta[,1:3]; colnames(meta)<-c("LocName", "LocTrap","year")
-meta$uniqueID<-paste0(meta$LocName, meta$LocTrap,meta$year)
 
+# create a unique ID that can be used for the species data
+meta$uniqueID<-paste0(meta$LocTrap,meta$year)
 
-# start creating species matrix
-cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list))
-colnames(cm.base) <- spec.list
-cm.base <- cbind(meta, cm.base)
+### 7) add sampling time and season to meta-data
+# (i) first add season to dat_all
+dat_all$start.day<-yday(dat_all$StartDate)
+hist(dat_all$start.day) #180 is a good separation between seasons
+
+dat_all$season<-'spring'
+dat_all$season[dat_all$start.day>=180]<-'summer'
+
+# (ii) now create a season meta data:
+x<-which(dat_all$season=='spring')
+meta.spring<- aggregate(list(dat_all$Males[x]), 
+                        by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x],
+                                dat_all$StartDate[x], dat_all$EndDate[x]), function(x){mean(x, na.rm=T)})
+colnames(meta.spring)<-c('LocName', 'LocTrap', 'year', 'StartDate', 'EndDate')
+meta.spring<-meta.spring[,-6]
+# this data frame contains now all trap collection periods - those are multiple per season (i.e spring or summer season)
+
+# (iii) we can now add a starting date and an end date of the spring season to the meta data
+# start date
+y<- aggregate(list(dat_all$StartDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
+              function(x){min(x, na.rm=T)})
+# end date
+y.2<- aggregate(list(dat_all$EndDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
+                function(x){max(x, na.rm=T)})
+colnames(y)<-c('LocName', 'LocTrap', 'year', 'StartDate')
+# bring both together and add exposure time
+y$EndDate<-y.2[,4]
+y$exposure<- yday(y$EndDate) - yday(y$StartDate)
+
+# (iv) now let's check whether exposure time is the same if the we sum up individual exposure times instead
+# if it is not, we have gaps in our sampling season
+meta.spring$exposure<- yday(meta.spring$EndDate) - yday(meta.spring$StartDate)
+
+y.3<- aggregate(list(meta.spring$exposure), 
+                by=list(meta.spring$LocName, meta.spring$LocTrap, meta.spring$year),
+                function(x){sum(x, na.rm=T)})
+colnames(y.3)<-c('LocName', 'LocTrap', 'year', 'exposure.true')
+
+gaps<-which((y$exposure==y.3$exposure.true)==F)
+# no, we do have quite a number of gaps in our sampling seasons (in 129 cases...)
+
+# (v) next identify the gaps in sampling seasons
+# first create a unique ID:
+y.3$uniqueID<-paste0(y.3$LocTrap,y.3$year); meta.spring$uniqueID<-paste0(meta.spring$LocTrap,meta.spring$year)
+
+# check how many gaps we have and save the first gap in two vectors
+gaps<-which((y$exposure==y.3$exposure.true)==F)
+no.of.gaps<-c(); start.gap<-as.Date(c()); end.gap<-as.Date(c())
+for(i in gaps){
+  starts<-unique(meta.spring$StartDate[which(meta.spring$uniqueID==y.3$uniqueID[i])])
+  ends<-unique(meta.spring$EndDate[which(meta.spring$uniqueID==y.3$uniqueID[i])])
+  starts<-starts[2:length(starts)]
+  ends<-ends[1:(length(ends)-1)]
+  no.of.gaps<-c(no.of.gaps, length(which(ends!=starts)))
+  # if there is a gap, there is always only one gap - take makes life easier...
+  start.gap<-c(start.gap, ends[which(ends!=starts)]) 
+  # this might first seems odd, but using ends here is correct
+  end.gap<-c(end.gap, starts[which(ends!=starts)])
+}
+
+# correct the exposure time in the y data frame (this now takes gaps into account)
+y$exposure<-y.3$exposure.true
+
+# add the information of gap start and end to the data frame
+y$spring.gap.start<-as.Date(NA); y$spring.gap.end<-as.Date(NA)
+y$spring.gap.start[gaps]<-start.gap; y$spring.gap.end[gaps]<-end.gap
+
+# (iv) now we can add spring exposure time and info about spring gap timing to the meta-data
+# get unique ID to the data frame with the info
+y$uniqueID<-paste0(y$LocTrap,y$year)
+
+# add the missing info
+meta$spring.start<- y$StartDate[match(meta$uniqueID, y$uniqueID)]
+meta$spring.end<- y$EndDate[match(meta$uniqueID, y$uniqueID)]
+meta$spring.gap.start<- y$spring.gap.start[match(meta$uniqueID, y$uniqueID)]
+meta$spring.gap.end<- y$spring.gap.end[match(meta$uniqueID, y$uniqueID)]
+meta$spring.exposure<- y$exposure[match(meta$uniqueID, y$uniqueID)]
+
+# (v) Now repeat this for the summer season...
+# create a season meta data:
+x<-which(dat_all$season=='summer')
+meta.summer<- aggregate(list(dat_all$Males[x]), 
+                        by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x],
+                                dat_all$StartDate[x], dat_all$EndDate[x]), function(x){mean(x, na.rm=T)})
+colnames(meta.summer)<-c('LocName', 'LocTrap', 'year', 'StartDate', 'EndDate')
+meta.summer<-meta.summer[,-6]
+
+# (vi) we can now add a starting date and an end date of the spring season to the meta data
+# start date
+y<- aggregate(list(dat_all$StartDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
+              function(x){min(x, na.rm=T)})
+# end date
+y.2<- aggregate(list(dat_all$EndDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
+                function(x){max(x, na.rm=T)})
+colnames(y)<-c('LocName', 'LocTrap', 'year', 'StartDate')
+# bring both together and add exposure time
+y$EndDate<-y.2[,4]
+y$exposure<- yday(y$EndDate) - yday(y$StartDate)
+
+# (vii) now let's check whether exposure time is the same if the we sum up individual exposure times instead
+# if it is not, we have gaps in our sampling season
+meta.summer$exposure<- yday(meta.summer$EndDate) - yday(meta.summer$StartDate)
+
+y.3<- aggregate(list(meta.summer$exposure), 
+                by=list(meta.summer$LocName, meta.summer$LocTrap, meta.summer$year),
+                function(x){sum(x, na.rm=T)})
+colnames(y.3)<-c('LocName', 'LocTrap', 'year', 'exposure.true')
+
+gaps<-which((y$exposure==y.3$exposure.true)==F)
+# no, we do have quite a number of gaps again (in 73 cases...)
+
+# (viii) next identify the gaps in sampling seasons
+# first create a unique ID:
+y.3$uniqueID<-paste0(y.3$LocTrap,y.3$year); meta.summer$uniqueID<-paste0(meta.summer$LocTrap,meta.summer$year)
+
+# check how many gaps we have and save the first gap in two vectors
+gaps<-which((y$exposure==y.3$exposure.true)==F)
+no.of.gaps<-c(); start.gap<-as.Date(c()); end.gap<-as.Date(c())
+for(i in gaps[]){
+  starts<-unique(meta.summer$StartDate[which(meta.summer$uniqueID==y.3$uniqueID[i])])
+  ends<-unique(meta.summer$EndDate[which(meta.summer$uniqueID==y.3$uniqueID[i])])
+  starts<-starts[2:length(starts)]
+  ends<-ends[1:(length(ends)-1)]
+  no.of.gaps<-c(no.of.gaps, length(which(ends!=starts)))
+  # again, only max one gap per trap in summer... that's good
+  start.gap<-c(start.gap, ends[which(ends!=starts)]) 
+  # this might first seems odd, but using ends here is correct
+  end.gap<-c(end.gap, starts[which(ends!=starts)])
+}
+
+# correct the exposure time in the y data frame (this now takes gaps into account)
+y$exposure<-y.3$exposure.true
+
+# add the information of gap start and end to the data frame
+y$summer.gap.start<-as.Date(NA); y$summer.gap.end<-as.Date(NA)
+y$summer.gap.start[gaps]<-start.gap; y$summer.gap.end[gaps]<-end.gap
+
+# (ix) now we can add spring exposure time and info about summer gap timing to the meta-data
+# get unique ID to the data frame with the info
+y$uniqueID<-paste0(y$LocTrap,y$year)
+
+# add the missing info
+meta$summer.start<- y$StartDate[match(meta$uniqueID, y$uniqueID)]
+meta$summer.end<- y$EndDate[match(meta$uniqueID, y$uniqueID)]
+meta$summer.gap.start<- y$summer.gap.start[match(meta$uniqueID, y$uniqueID)]
+meta$summer.gap.end<- y$summer.gap.end[match(meta$uniqueID, y$uniqueID)]
+meta$summer.exposure<- y$exposure[match(meta$uniqueID, y$uniqueID)]
+
+# (x) compute total exposure time for each trap-year combination and check its distribution
+meta$total.exposure<-meta$spring.exposure+meta$summer.exposure
+hist(meta$total.exposure, breaks = 40)
+# options for rarefracation thresholds if only days of exposure are considered (in my opinion)
+length(which(meta$total.exposure<64))
+length(which(meta$total.exposure<69))
+
+rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
 
 
 ### 8) create species matrices (abundance and biomass)
 
 # different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
+
 abundance <- aggregate(list(abundance_female = dat_all$Females,
-                       abundance_male = dat_all$Males,
-                       abundance_total = dat_all$Females_Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year, dat_all$GenSpec), function(x){sum(x, na.rm=T)})
+                            abundance_male = dat_all$Males,
+                            abundance_total = dat_all$Females_Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year, dat_all$GenSpec), function(x){sum(x, na.rm=T)})
 colnames(abundance)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
 abundance$uniqueID<-paste0(abundance$LocName, abundance$LocTrap,abundance $year)
 

@@ -320,6 +320,29 @@ cm.ab.total<- cm.ab.summer+cm.ab.spring
 
 rm(subset)
 
+########## B) Comparison of spring and summer data #########
+
+### 1) create a first overview of the total abundance ratios
+# create a ratio between summer and spring abundance that takes the exposure days of the seasons into account
+meta$season.ratios<- (rowSums(cm.ab.summer)/ meta$summer.exposure) / (rowSums(cm.ab.spring)/ meta$spring.exposure)
+
+hist(meta$season.ratios[which(meta$season.ratios<5)])
+summary(meta$season.ratios)
+
+### 2) check species specific results
+# define thresholds for abundance per year (e.g. 30) and then a threshold for number of year-trap combinations that full fill that requirement
+
+abundance.thr<-25; n.thr<-30
+sp.season.ratios<-list()
+for(i in 1:ncol(cm.ab.total)){
+  data.points<-which(cm.ab.total[,i]>=abundance.thr)
+  if(length(data.points)>=n.thr){sp.season.ratios[[i]]<-(cm.ab.summer[data.points,i]/ meta$summer.exposure[data.points]) / 
+      (cm.ab.spring[data.points,i]/ meta$spring.exposure[data.points])}
+}
+
+
+
+rm(data.points)
 # next step:
 # control creation of species matrix
 # create presence-absence matrix total 

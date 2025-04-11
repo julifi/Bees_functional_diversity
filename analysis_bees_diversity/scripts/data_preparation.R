@@ -56,7 +56,7 @@ colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "
 
 ### 3) Synchronize species names in the two data sets
 for(i in 1:nrow(data_19_21)){pos<-which(strsplit(data_19_21$fullGenSpec[i], "")[[1]]==" ")
-                             data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
+data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
 
 # check whether all species names in 19-21 are also there in the file before
 x<-unique(data_19_21$fullGenSpec); y<-unique(data_10_19$GenSpec)
@@ -148,10 +148,10 @@ meta.spring<-meta.spring[,-6]
 # (iii) we can now add a starting date and an end date of the spring season to the meta data
 # start date
 y<- aggregate(list(dat_all$StartDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
-                                                  function(x){min(x, na.rm=T)})
+              function(x){min(x, na.rm=T)})
 # end date
 y.2<- aggregate(list(dat_all$EndDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
-              function(x){max(x, na.rm=T)})
+                function(x){max(x, na.rm=T)})
 colnames(y)<-c('LocName', 'LocTrap', 'year', 'StartDate')
 # bring both together and add exposure time
 y$EndDate<-y.2[,4]
@@ -163,7 +163,7 @@ meta.spring$exposure<- yday(meta.spring$EndDate) - yday(meta.spring$StartDate)
 
 y.3<- aggregate(list(meta.spring$exposure), 
                 by=list(meta.spring$LocName, meta.spring$LocTrap, meta.spring$year),
-              function(x){sum(x, na.rm=T)})
+                function(x){sum(x, na.rm=T)})
 colnames(y.3)<-c('LocName', 'LocTrap', 'year', 'exposure.true')
 
 gaps<-which((y$exposure==y.3$exposure.true)==F)
@@ -182,9 +182,9 @@ for(i in gaps){
   starts<-starts[2:length(starts)]
   ends<-ends[1:(length(ends)-1)]
   no.of.gaps<-c(no.of.gaps, length(which(ends!=starts)))
-# if there is a gap, there is always only one gap - take makes life easier...
+  # if there is a gap, there is always only one gap - take makes life easier...
   start.gap<-c(start.gap, ends[which(ends!=starts)]) 
-# this might first seems odd, but using ends here is correct
+  # this might first seems odd, but using ends here is correct
   end.gap<-c(end.gap, starts[which(ends!=starts)])
 }
 
@@ -208,7 +208,7 @@ meta$spring.exposure<- y$exposure[match(meta$uniqueID, y$uniqueID)]
 
 # (v) Now repeat this for the summer season...
 # create a season meta data:
-  x<-which(dat_all$season=='summer')
+x<-which(dat_all$season=='summer')
 meta.summer<- aggregate(list(dat_all$Males[x]), 
                         by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x],
                                 dat_all$StartDate[x], dat_all$EndDate[x]), function(x){mean(x, na.rm=T)})
@@ -287,12 +287,29 @@ x<-meta[which(meta$total.exposure>90),]
 
 rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
 
-### 8) start creating species matrix
 
-cm.females<-matrix(nrow = nrow(meta), ncol=length(spec.list))
+### 8) create species matrices (abundance and biomass)
 
-# now fill the species matrix
-# create one for males, one for females, one for total abundance combined (f and m), one for total biomass
+# different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
+
+abundance <- aggregate(list(abundance_female = dat_all$Females,
+                            abundance_male = dat_all$Males,
+                            abundance_total = dat_all$Females_Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year, dat_all$GenSpec), function(x){sum(x, na.rm=T)})
+colnames(abundance)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
+abundance$uniqueID<-paste0(abundance$LocName, abundance$LocTrap,abundance $year)
+
+cm.ab.females <- abundance[c("uniqueID", "GenSpec", "abundance_female")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_female) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+cm.ab.males <- abundance[c("uniqueID", "GenSpec", "abundance_male")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_male) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
+cm.ab.total <- abundance[c("uniqueID", "GenSpec", "abundance_total")] %>%
+  pivot_wider(names_from = GenSpec, values_from = abundance_total) %>%
+  mutate_all(~replace(., is.na(.), 0))
+
 
 
 

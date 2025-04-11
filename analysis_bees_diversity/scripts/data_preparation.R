@@ -259,7 +259,6 @@ for(i in gaps[]){
   end.gap<-c(end.gap, starts[which(ends!=starts)])
 }
 
-
 # correct the exposure time in the y data frame (this now takes gaps into account)
 y$exposure<-y.3$exposure.true
 
@@ -285,66 +284,50 @@ hist(meta$total.exposure, breaks = 40)
 length(which(meta$total.exposure<64))
 length(which(meta$total.exposure<69))
 
-x<-meta[which(meta$total.exposure>90),]
-
 rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
-
 
 ### 8) create species matrices (abundance and biomass)
 
-# different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
-# base species matrix
-cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list))
-colnames(cm.base) <- spec.list
-cm.base <- cbind(meta, cm.base)
+# (i) remove honey from spec list
+spec.list<- spec.list[-which(spec.list=='Apis mellifera')]
 
-# create new column on abundance of both females and males
+# (ii) different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
+# base species matrix
+cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list), rep(0,nrow(meta)* length(spec.list)))
+colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
+
+# (iii) create new column on abundance of both females and males
 # use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
 dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
 
 # whole year:
-abundance_year <- aggregate(list(abundance_female = dat_all$Females,
-                            abundance_male = dat_all$Males,
-                            abundance_total = dat_all$Females_Males), by=list(dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec), function(x){sum(x, na.rm=T)})
-colnames(abundance_year)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
-abundance_year$uniqueID<-paste0(abundance_year$LocTrap,abundance_year$year)
-abundance_year$season <- "both"
+abundance_year_trap <- aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, abundance_total = dat_all$Females_Males), 
+                            by=list(dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season), function(x){sum(x, na.rm=T)})
+colnames(abundance_year_trap)[1:5]<-c("LocName", "LocTrap","year", "GenSpec","season")
+abundance_year_trap$uniqueID<-paste0(abundance_year_trap$LocTrap,abundance_year_trap$year)
 
-# spring:
-dat_all_spring <- dat_all %>%
-  dplyr::filter(season == "spring") 
-abundance_spring <- aggregate(list(abundance_female = dat_all_spring$Females,
-                                 abundance_male = dat_all_spring$Males,
-                                 abundance_total = dat_all_spring$Females_Males), by=list(dat_all_spring$LocName, dat_all_spring$LocTrap, dat_all_spring$year, dat_all_spring$GenSpec), function(x){sum(x, na.rm=T)})
-colnames(abundance_spring)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
-abundance_spring$uniqueID<-paste0(abundance_spring$LocTrap,abundance_spring$year)
-abundance_spring$season <- "spring"
+cm.ab.spring<-cm.base
+subset<-abundance_year_trap[which(abundance_year_trap$season=='spring'),]
+for(i in 1:nrow(subset)){cm.ab.spring[which(rownames(cm.ab.spring)==subset$uniqueID[i]), which(colnames(cm.ab.spring)==subset$GenSpec[i])]<-
+                                        subset$abundance_total[i]}
 
-# summer:
-dat_all_summer <- dat_all %>%
-  dplyr::filter(season == "summer") 
-abundance_summer <- aggregate(list(abundance_female = dat_all_summer$Females,
-                                   abundance_male = dat_all_summer$Males,
-                                   abundance_total = dat_all_summer$Females_Males), by=list(dat_all_summer$LocName, dat_all_summer$LocTrap, dat_all_summer$year, dat_all_summer$GenSpec), function(x){sum(x, na.rm=T)})
-colnames(abundance_summer)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
-abundance_summer$uniqueID<-paste0(abundance_summer$LocTrap,abundance_summer$year)
-abundance_summer$season <- "summer"
+cm.ab.summer<-cm.base
+subset<-abundance_year_trap[which(abundance_year_trap$season=='summer'),]
+for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqueID[i]), which(colnames(cm.ab.summer)==subset$GenSpec[i])]<-
+                                        subset$abundance_total[i]}
 
+cm.ab.total<- cm.ab.summer+cm.ab.spring
 
-cm.ab.females <- abundance[c("uniqueID", "GenSpec", "abundance_female")] %>%
-  pivot_wider(names_from = GenSpec, values_from = abundance_female) %>%
-  mutate_all(~replace(., is.na(.), 0))
-cm.ab.females.allseason <- left_join(meta, cm.ab.females, by="uniqueID")
-  
-cm.ab.males <- abundance[c("uniqueID", "GenSpec", "abundance_male")] %>%
-  pivot_wider(names_from = GenSpec, values_from = abundance_male) %>%
-  mutate_all(~replace(., is.na(.), 0))
-cm.ab.males.allseason <- left_join(meta, cm.ab.males, by="uniqueID")
+rm(subset)
 
-cm.ab.total <- abundance[c("uniqueID", "GenSpec", "abundance_total")] %>%
-  pivot_wider(names_from = GenSpec, values_from = abundance_total) %>%
-  mutate_all(~replace(., is.na(.), 0))
-cm.ab.total.allseason <- left_join(meta, cm.ab.total, by="uniqueID")
+# next step:
+# control creation of species matrix
+# create presence-absence matrix total 
+# create biomass matrix (get male size data)
+# transmit biomass matrix into metabolic rates
+# add honey bee abundance (females) to meta-data
+
+# look at spring-summer ratios
 
 
 

@@ -326,7 +326,7 @@ abundance_summer <- aggregate(list(abundance_female = dat_all_summer$Females,
                                    abundance_total = dat_all_summer$Females_Males), by=list(dat_all_summer$LocName, dat_all_summer$LocTrap, dat_all_summer$year, dat_all_summer$GenSpec), function(x){sum(x, na.rm=T)})
 colnames(abundance_summer)<-c("LocName", "LocTrap","year", "GenSpec", "abundance_female", "abundance_male", "abundance_total")
 abundance_summer$uniqueID<-paste0(abundance_summer$LocTrap,abundance_summer$year)
-abundance_summer$season <- "spring"
+abundance_summer$season <- "summer"
 
 
 cm.ab.females <- abundance[c("uniqueID", "GenSpec", "abundance_female")] %>%

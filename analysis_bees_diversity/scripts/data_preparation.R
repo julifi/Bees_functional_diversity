@@ -283,6 +283,8 @@ hist(meta$total.exposure, breaks = 40)
 length(which(meta$total.exposure<64))
 length(which(meta$total.exposure<69))
 
+x<-meta[which(meta$total.exposure>90),]
+
 rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
 
 ### 8) start creating species matrix

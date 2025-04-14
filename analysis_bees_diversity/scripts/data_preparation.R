@@ -71,6 +71,7 @@ data_19_21$fullGenSpec[which(data_19_21$fullGenSpec==x$x[229])]<- 'Stelis odonto
 data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[13])]<- 'Andrena coitana'
 data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[122])]<- 'Halictus leucaheneus'
 data_10_19$GenSpec[which(data_10_19$GenSpec==y$y[277])]<- 'Stelis odontopyga'
+data_10_19$GenSpec[which(data_10_19$GenSpec=='Sphaecodes miniatus')] <- 'Sphecodes miniatus'
 
 # check whether remaining mismatches are really new species in 2019-21
 x<-unique(data_19_21$fullGenSpec); y<-unique(data_10_19$GenSpec)
@@ -291,16 +292,19 @@ rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start
 # (i) remove honey from spec list
 spec.list<- spec.list[-which(spec.list=='Apis mellifera')]
 
-# (ii) different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
+# (ii) different species matrix: one for total abundance combined (f and m (without communal species)), 
+#                                one for total biomass combined (f and m (without communal species))
+#                                one for total presence/absence combined (f and m)
 # base species matrix
 cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list), rep(0,nrow(meta)* length(spec.list)))
 colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
 
-# (iii) create new column on abundance of both females and males
+# (iii) create matrix total abundance combined (f and m (without communal species))
+# create new column on abundance of both females and males
 # use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
 dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
 
-# whole year:
+# aggregate abundance on year-trap-season level:
 abundance_year_trap <- aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, abundance_total = dat_all$Females_Males), 
                             by=list(dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season), function(x){sum(x, na.rm=T)})
 colnames(abundance_year_trap)[1:5]<-c("LocName", "LocTrap","year", "GenSpec","season")
@@ -317,7 +321,39 @@ for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqu
                                         subset$abundance_total[i]}
 
 cm.ab.total<- cm.ab.summer+cm.ab.spring
+rm(subset)
 
+# (iv) create matrix total biomass combined (f and m (without communal species))
+# create new column on abundance of both females and males
+
+# add length data to abundance data on year-trap-season level and calculate biomass:
+abundance_year_trap$mean_body_length_f_[mm] <- abundance_year_trap
+traits$`mean_body_length_f_[mm]`
+
+# species for which we already have trait data
+x <- unique(traits$species)
+# all species for which we have abundance data
+y <- unique(abundance_year_trap$GenSpec)
+
+# species for which we have to add trait data 
+y[which(y%in%x == FALSE)] 
+
+which(abundance_year_trap$GenSpec=="Sphaecodes miniatus" == TRUE)
+
+abundance_year_trap$uniqueID[which(abundance_year_trap$GenSpec=="Sphaecodes miniatus")]
+abundance_year_trap$uniqueID[which(abundance_year_trap$GenSpec=="Sphecodes miniatus")]
+
+cm.ab.spring<-cm.base
+subset<-abundance_year_trap[which(abundance_year_trap$season=='spring'),]
+for(i in 1:nrow(subset)){cm.ab.spring[which(rownames(cm.ab.spring)==subset$uniqueID[i]), which(colnames(cm.ab.spring)==subset$GenSpec[i])]<-
+  subset$abundance_total[i]}
+
+cm.ab.summer<-cm.base
+subset<-abundance_year_trap[which(abundance_year_trap$season=='summer'),]
+for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqueID[i]), which(colnames(cm.ab.summer)==subset$GenSpec[i])]<-
+  subset$abundance_total[i]}
+
+cm.ab.total<- cm.ab.summer+cm.ab.spring
 rm(subset)
 
 # next step:

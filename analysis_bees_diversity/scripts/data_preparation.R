@@ -8,21 +8,14 @@ datpath <- wrkpath %+% "data/"
 
 
 ## Load Libraries ############################################################# 
-library(readr)
-library(plyr)
-library(dplyr)
-library(stringr)
-library(tidyr)
-library(data.table)
-library(purrr)
-library(countrycode)
-library(readxl)
-library(terra)
-library(sf)
-library(exactextractr)
-library(raster)
-library(rlang)
-library(openxlsx)
+library(readr); library(plyr); library(dplyr); library(stringr); library(tidyr); library(data.table); library(purrr)
+library(countrycode); library(readxl); library(terra); library(sf); library(exactextractr); library(raster)
+library(rlang); library(openxlsx); library(ggplot2); library(ggridges); library(vegan)
+
+# load in colour palette
+cbPalette6 <- c( "#D0B541",  "#7EB875", "#57A2AC", "#4E78C4",  "#CE2220","#E67F33")
+rainbow10<-c(rgb(82,25,19,maxColorValue=255),"#CE2220","#E67F33", "#D0B541",  "#7EB875", "#57A2AC", "#4E78C4",  
+             rgb(130,77,153,maxColorValue=255),rgb(185,151,198,maxColorValue=255),rgb(231,235,250,maxColorValue=255))
 
 ########## A) Data preparation #########
 
@@ -106,10 +99,13 @@ colnames(data_19_21)[1]<-'GenSpec'
 dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")],
                 data_19_21[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")])
 
-# there is one sample that is associated to the wrong year, we need to correct that
+# there is one sample that is associated to the wrong year, we need to correct that// Mark said the correcction is wrong, so let's remove it
 dat_all$uniqueID<-paste0(dat_all$LocTrap,dat_all$year)
-dat_all$year[which(dat_all$uniqueID=='HAR152020' & dat_all$EndDate== dat_all$EndDate[55953]
-                   & dat_all$StartDate== dat_all$StartDate[55953])]<-2021
+# dat_all$year[which(dat_all$uniqueID=='HAR152020' & dat_all$EndDate== dat_all$EndDate[55953]
+#                    & dat_all$StartDate== dat_all$StartDate[55953])]<-2021
+
+dat_all<-dat_all[-which(dat_all$uniqueID=='HAR152020' & 
+                          dat_all$EndDate== dat_all$EndDate[55953]& dat_all$StartDate== dat_all$StartDate[55953]),]
 
 ### 5) take all social bees - I would exclude the male bees as those are probably not contributing to pollination.
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
@@ -280,7 +276,7 @@ meta$summer.exposure<- y$exposure[match(meta$uniqueID, y$uniqueID)]
 # (x) compute total exposure time for each trap-year combination and check its distribution
 meta$total.exposure<-meta$spring.exposure+meta$summer.exposure
 hist(meta$total.exposure, breaks = 40)
-# options for rarefracation thresholds if only days of exposure are considered (in my opinion)
+# options for rarefaction thresholds if only days of exposure are considered (in my opinion)
 length(which(meta$total.exposure<64))
 length(which(meta$total.exposure<69))
 
@@ -289,7 +285,7 @@ rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start
 ### 8) create species matrices (abundance and biomass)
 
 # (i) remove honey from spec list
-spec.list<- spec.list[-which(spec.list=='Apis mellifera')]
+spec.list<- spec.list[which(spec.list!='Apis mellifera')]
 
 # (ii) different species matrix: one for males, one for females, one for total abundance combined (f and m), one for total biomass
 # base species matrix
@@ -332,25 +328,116 @@ summary(meta$season.ratios)
 ### 2) check species specific results
 # define thresholds for abundance per year (e.g. 30) and then a threshold for number of year-trap combinations that full fill that requirement
 
+# (i) create summer-spring ratios for all species that meet the requirement
 abundance.thr<-25; n.thr<-30
-sp.season.ratios<-list()
+sp.season.ratios<-list(); sp.season.ratios.plot<- data.frame(species =c(), summer_spring_ratios = c())
 for(i in 1:ncol(cm.ab.total)){
   data.points<-which(cm.ab.total[,i]>=abundance.thr)
   if(length(data.points)>=n.thr){sp.season.ratios[[i]]<-(cm.ab.summer[data.points,i]/ meta$summer.exposure[data.points]) / 
-      (cm.ab.spring[data.points,i]/ meta$spring.exposure[data.points])}
+      (cm.ab.spring[data.points,i]/ meta$spring.exposure[data.points])
+      x<-data.frame(species =rep(spec.list[i]), 
+                    summer_spring_ratios = c((cm.ab.summer[data.points,i]/ meta$summer.exposure[data.points]) / 
+                                                               (cm.ab.spring[data.points,i]/ meta$spring.exposure[data.points])))
+      sp.season.ratios.plot<-rbind(sp.season.ratios.plot,x)
+  }
 }
 
+# (ii) plot the differences in species
+sp.season.ratios.plot$summer_spring_ratios[which(is.infinite(sp.season.ratios.plot$summer_spring_ratios))]<-
+  max(sp.season.ratios.plot$summer_spring_ratios)
+
+ggplot(sp.season.ratios.plot, aes(x = log(summer_spring_ratios+1), y = species, fill = species)) + geom_boxplot() +theme_bw()
+
+ggplot(sp.season.ratios.plot, aes(x=log(summer_spring_ratios+1) ,y=species,fill=species))+
+  geom_density_ridges(alpha = 0.5,jittered_points = TRUE, point_alpha=1,point_shape=21) + 
+  labs(x="Summer-spring ratio (logged)",y='')+ 
+  guides(fill=FALSE,color=FALSE) + theme_bw()
+
+rm(data.points, sp.season.ratios, sp.season.ratios.plot, abundance.thr, n.thr,x)
 
 
-rm(data.points)
+### 3) plot a PCA of the community matrix to check for the impact of season... 
+library(factoextra) #http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/118-principal-component-analysis-in-r-prcomp-vs-princomp/
+
+# (i) merge spring and summer data
+cm.ab.two_season<-rbind(cm.ab.spring, cm.ab.summer)
+meta.two_season<-rbind(meta[,1:4], meta[,1:4])
+meta.two_season$season<-c(rep('spring', nrow(meta)), rep('summer', nrow(meta)))
+
+cm.ab.two_season<-as.data.frame(cm.ab.two_season)
+cm.ab.two_season.mod<-apply(cm.ab.two_season,1, function(x){x/sum(x)})
+cm.ab.two_season.mod<-as.data.frame(t(cm.ab.two_season.mod))
+
+x<-which(is.nan(rowSums(cm.ab.two_season.mod)))
+
+cm.ab.two_season[672,] # there are some samples that contain no individuals (probably they only contained honey bees...)
+
+cm.ab.two_season.mod[x,]<- rep(0, ncol(cm.ab.two_season.mod))
+
+res.pca <- prcomp((cm.ab.two_season.mod), scale = F) # species need to be in columns
+pca<-as.data.frame(res.pca$x)
+
+# check explained variance
+# summary(res.pca)
+
+plot<-data.frame(meta.two_season, pca[,c(1:5)])
+cbPalette7<-c(cbPalette6, "gray")
+
+#define colour for helo
+colour.points<- rep("#505050", nrow(plot))
+colour.points[plot$season=="summer"]<- "#D8D8D8"
+
+#create new shape column to combine species and location
+plot$shape.var<-as.factor(plot$LocName)
+
+# 500*340; LocName; season, year
+
+ggplot(plot, aes(x=(PC1), y=PC2, group = season, color=as.factor(year))) + theme_bw() +
+  stat_ellipse( aes(x=PC1, y=PC2, group=season), linetype = "longdash", size = 0.5, col = "lightgray") + 
+  geom_hline(yintercept=0, color = "darkgrey", linetype = "dashed", size = 0.5)+
+  geom_vline(xintercept=0, color = "darkgrey", linetype = "dashed", size = 0.5)+
+  geom_point(size=4.5, colour = colour.points, fill = colour.points) + geom_point(size=2, alpha = 1, fill="white", colour = "white") + 
+  geom_point(size=2.4, alpha = 0.2)
+  
+
+# # 
+# ggplot(plot, aes(x=PC1, y=PC2, colour=as.factor(year), shape = shape.var)) + theme_bw() +
+#   stat_ellipse( aes(x=PC1, y=PC2, group=season), linetype = "longdash", size = 0.5, col = "lightgray") + 
+#   geom_hline(yintercept=0, color = "darkgrey", linetype = "dashed", size = 0.5)+
+#   geom_vline(xintercept=0, color = "darkgrey", linetype = "dashed", size = 0.5)+
+#   geom_point(size=4.5, colour = colour.points, fill = colour.points) + geom_point(size=2, alpha = 1, fill="white", colour = "white") + 
+#   geom_point(size=2.4, colour = stage("black", after_scale = alpha(color, .01)), alpha = 1) + 
+#   #geom_text(hjust=0, vjust=0) + shows that CS26 and CS27 have been mixed up during the metabolomic processing!
+#   #stat_ellipse(linetype = "solid", size = 0.5) + 
+#   scale_colour_manual(values=c(rainbow10[c(2,7)] ))+ scale_shape_manual(values=c(24,22,21,25,23)) + 
+#   scale_fill_manual(values=c(rainbow10[c(2,7)] ))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # next step:
 # control creation of species matrix
 # create presence-absence matrix total 
 # create biomass matrix (get male size data)
 # transmit biomass matrix into metabolic rates
 # add honey bee abundance (females) to meta-data
+# think about removing trap-year combinations that contain 0 individuals (or which are below a certain threshold)
 
-# look at spring-summer ratios
+
+
+
+
+
 
 
 

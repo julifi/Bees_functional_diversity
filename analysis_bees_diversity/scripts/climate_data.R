@@ -3,7 +3,6 @@ install.packages("rdwd")
 install.packages("RCurl")
 
 
-
 # BEFORE: run setting.R
 getwd()
 
@@ -20,13 +19,13 @@ rasterbase <- paste0(gridbase,"/hourly/hostrada")
 ftp.files <- indexFTP("/air_temperature_mean", base=rasterbase, dir=tempdir())
 
 # current index of all grid files (takes > 2 min, yields >30k charstrings >5MB):
-gridIndexNow <- indexFTP(base=gridbase, filename="grids")
+#gridIndexNow <- indexFTP(base=gridbase, filename="grids")
 
 ## set reference raster
 link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025040100-2025043023.nc"  #  5 MB
 file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
-plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
+#plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
 
 ### 2. read nc files ------------------
 
@@ -61,7 +60,7 @@ sites  <- dplyr::rename(sites, "Year" = "YEAR")
 sites  <- dplyr::rename(sites, "lon" = "coordinates")
 sites  <- dplyr::rename(sites, "lat" = "...5")
 # remove empty top rows  
-sites  <- data_sites[3:nrow(sites),]
+sites  <- sites[3:nrow(sites),]
 
 sites_2010 <- dplyr::filter(sites, Year == 2010)
 sites_2010 <- sites_2010[c("Trap", "lon", "lat")]
@@ -84,6 +83,6 @@ plot(sites_proj)
 cell_id <- cellFromXY(raster, crds(sites_proj))  
 
 # add colum with cell_id to sites data.frame:
-data_sites_id_2010 <- cbind(data_sites_2010, cell_id)
+sites_id_2010 <- cbind(sites_2010, cell_id)
 
 

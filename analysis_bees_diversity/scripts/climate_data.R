@@ -86,3 +86,17 @@ cell_id <- cellFromXY(raster, crds(sites_proj))
 sites_id_2010 <- cbind(sites_2010, cell_id)
 
 
+### 4. choose relavant raster files (hourly resolution) on temp & precipitation from .nc files 
+# depending on: exact sampling days, daytime
+
+## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
+# --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
+# --> xth day, y o'clock = (x-1)*24 + y
+
+# load dat_all (prepared in script data_preparation.R)
+
+# create raster stack for each sampling period containing all daylight raster within the sampling period (for Start and Endday: start/end at 12 o'clock)
+dat_all[1,]$StartDate
+dat_all[1,]$EndDate
+
+

@@ -108,7 +108,7 @@ dat_all$uniqueID<-paste0(dat_all$LocTrap,dat_all$year)
 dat_all<-dat_all[-which(dat_all$uniqueID=='HAR152020' & 
                           dat_all$EndDate== dat_all$EndDate[55953]& dat_all$StartDate== dat_all$StartDate[55953]),]
 
-### 5) take all social bees - I would exclude the male bees as those are probably not contributing to pollination.
+### 5) take all social bees - I would exclude the male social bees as those are probably not contributing to pollination.
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
 
 # merging parameter showing whether males should be used or not
@@ -128,7 +128,7 @@ meta$uniqueID<-paste0(meta$LocTrap,meta$year)
 ### 7) add sampling time and season to meta-data
 # (i) first add season to dat_all
 dat_all$start.day<-yday(dat_all$StartDate)
-hist(dat_all$start.day) #180 is a good separation between seasons
+hist(dat_all$start.day) # day 180 is a good separation between seasons
 
 dat_all$season<-'spring'
 dat_all$season[dat_all$start.day>=180]<-'summer'
@@ -352,7 +352,80 @@ for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqu
 cm.ab.total<- cm.ab.summer+cm.ab.spring
 rm(subset)
 
-########## B) Comparison of spring and summer data #########
+########## B) Create a list that contains for each year-season-site combination the exposure days #########
+sampling.days<-list(); meta.sampling.days<-c()
+
+for (i in 1:nrow(meta)){
+  #this is a wrapper in case the whole season is missing (no data)
+  if(is.na(meta$spring.start[i])==F){
+    
+  # first get all day of the years in the spring
+  if(is.na(meta$spring.gap.start[i])){ # here you get day of the year if you have no gap in sampling
+    dyear.spring<-yday(meta$spring.start)[i]:yday(meta$spring.end)[i]
+  }else{ # here you get day of the year if you have a gap in sampling
+    dyear.spring<-c(yday(meta$spring.start)[i]:yday(meta$spring.gap.start)[i],
+                    yday(meta$spring.gap.end)[i]:yday(meta$spring.end)[i])
+  }
+  # define which days are start or end days of the sampling period - start is 1, end is 2
+  startend.spring<-rep(0,length(dyear.spring))
+  # these are obvious start and end days
+  startend.spring[1]<-1; startend.spring[length(startend.spring)]<-2
+  # account for the start and end of gaps
+  startend.spring[which(dyear.spring==yday(meta$spring.gap.start[i]))]<-2
+  startend.spring[which(dyear.spring==yday(meta$spring.gap.end[i]))]<-1
+  # now reconvert dyear.spring into date format
+  dates.spring<-as.Date(dyear.spring-1, origin = paste0(year(meta$spring.start[i]),"-01-01"))
+  # and get months and day of the month
+  spring.month<-c(month(dates.spring)); spring.day<-c(mday(dates.spring))
+  spring<-data.frame(dates.spring, spring.month, spring.day, startend.spring)
+  
+  # append the data
+  sampling.days<-c(sampling.days, list(spring))
+  meta.sampling.days<-rbind(meta.sampling.days, data.frame(
+    LocTrap=rep(meta$LocTrap[i],1), year=rep(meta$year[i],1), season=c('spring')))
+  }
+  
+  # now let's get the same for summer 
+  
+  #this is a wrapper in case the whole season is missing (no data)
+  if(is.na(meta$summer.start[i])==F){
+    # here starts the summer code
+  if(is.na(meta$summer.gap.start[i])){ # here you get day of the year if you have no gap in sampling
+    dyear.summer<-yday(meta$summer.start)[i]:yday(meta$summer.end)[i]
+  }else{ # here you get day of the year if you have a gap in sampling
+    dyear.summer<-c(yday(meta$summer.start)[i]:yday(meta$summer.gap.start)[i],
+                    yday(meta$summer.gap.end)[i]:yday(meta$summer.end)[i])
+  }
+  # define which days are start or end days of the sampling period - start is 1, end is 2
+  startend.summer<-rep(0,length(dyear.summer))
+  # these are obvious start and end days
+  startend.summer[1]<-1; startend.summer[length(startend.summer)]<-2
+  # account for the start and end of gaps
+  startend.summer[which(dyear.summer==yday(meta$summer.gap.start[i]))]<-2
+  startend.summer[which(dyear.summer==yday(meta$summer.gap.end[i]))]<-1
+  # now reconvert dyear.summer into date format
+  dates.summer<-as.Date(dyear.summer-1, origin = paste0(year(meta$summer.start[i]),"-01-01"))
+  # and get months and day of the month
+  summer.month<-c(month(dates.summer)); summer.day<-c(mday(dates.summer))
+  summer<-data.frame(dates.summer, summer.month, summer.day, startend.summer)
+  
+  sampling.days<-c(sampling.days, list(summer))
+    meta.sampling.days<-rbind(meta.sampling.days, data.frame(
+    LocTrap=rep(meta$LocTrap[i],1), year=rep(meta$year[i],1), season=c('summer')))
+  }
+  }
+
+# comment: some sampling seasons are completely missing. Hence, the list is not exactly twice as long as the 
+# meta data-frame. 
+
+rm(spring.month, spring.day, dyear.spring, dates.spring, startend.spring,
+   summer.month, summer.day, dyear.summer, dates.summer, startend.summer)
+
+# save the list as file
+saveRDS(sampling.days, file="analysis_bees_diversity/data/sampling_days_siteyseason.RData")
+write.csv(meta.sampling.days, 'analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv')
+
+########## C) Comparison of spring and summer data #########
 
 ### 1) create a first overview of the total abundance ratios
 # create a ratio between summer and spring abundance that takes the exposure days of the seasons into account

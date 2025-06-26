@@ -62,6 +62,10 @@ sites  <- dplyr::rename(sites, "lat" = "...5")
 # remove empty top rows  
 sites  <- sites[3:nrow(sites),]
 
+# check whether lat.long are across the sampling time consistent
+check<-aggregate(sites$lat,by = list(sites$Trap), function(x){length(unique(x))})
+max(check[,2]) # yes they are
+
 sites_2010 <- dplyr::filter(sites, Year == 2010)
 sites_2010 <- sites_2010[c("Trap", "lon", "lat")]
 sites_2010 <- sites_2010[,c(3,2,1)]
@@ -86,7 +90,7 @@ cell_id <- cellFromXY(raster, crds(sites_proj))
 sites_id_2010 <- cbind(sites_2010, cell_id)
 
 
-### 4. choose relavant raster files (hourly resolution) on temp & precipitation from .nc files 
+### 4. choose relavant raster files (hourly resolution) on temp & precipitation from .nc files -----
 # depending on: exact sampling days, daytime
 
 ## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
@@ -98,5 +102,79 @@ sites_id_2010 <- cbind(sites_2010, cell_id)
 # create raster stack for each sampling period containing all daylight raster within the sampling period (for Start and Endday: start/end at 12 o'clock)
 dat_all[1,]$StartDate
 dat_all[1,]$EndDate
+
+### 5. compute suitability scores for wild-bee pollination for each sampling interval  -------
+
+# there are three constants in the formula that defines the suitability of temp for pollination
+# here, we define their range
+t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
+t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
+sigma <- seq(0.5,5, length=10) # defines the shape of the sigmodid shape of bee activity below t.opt
+
+constants.grid<- expand.grid(t.opt, t.max, sigma)
+names(constants.grid) <- c("t.opt", "t.max", "sigma")
+# account for the fact that max temp needs to be at least 1 degree above opt. temperature
+constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max+1),]
+rm(t.opt, t.max, sigma)
+
+# we create a procedure that will be implemented for each sampling period in a loop
+for (i in 1:length(input.data)){
+  
+  placeholder<-  input.data[[i]] # we extract the climate data of a given sampling period
+  
+# for now, we assume made-up data, we can delete this later... 
+placeholder<- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
+
+# prepare output data-frame for a given sampling period
+output.period<-c()
+
+# we compute for each hour the suitability score for each combinations of constants in the grid
+for(j in 1:nrow(constants.grid)){
+  suitability.estimate<-rep(0, nrow(placeholder)) #we create a vector for the suitability scores for each hr
+  
+  #define which hrs had a rainfall of 0 and temp below or above the optimum
+  below.opt<-which(placeholder$rainfall==0 & placeholder$temp <= constants.grid$t.opt[j])
+  above.opt<-which(placeholder$rainfall==0 & placeholder$temp > constants.grid$t.opt[j])
+  
+  # compute the suitability score for temp above and below the temp optimum separately 
+  suitability.estimate[below.opt]<- exp(-((placeholder$temp[below.opt]-constants.grid$t.opt[j])/
+                                            (2*constants.grid$sigma[j]))^2)
+  suitability.estimate[above.opt]<- 1-((placeholder$temp[above.opt]-constants.grid$t.opt[j])/
+                                         (constants.grid$t.opt[j]- constants.grid$t.max[j]))^2
+  
+  # negative suitability values need to be set to 0
+  suitability.estimate[which(suitability.estimate<0)]<-0
+  
+  # output for each sampling period needs to be prepared and saved
+  suitability.score<-sum(suitability.estimate)
+  output.period<-c(output.period, suitability.score)
+  }
+
+output<-cbind(output, output.period)
+}
+
+rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
+
+# next steps:
+# - load in the other predictors and the random effect variables. 
+# - establish the regression model structure and let it run for all data combinations; play around with
+#       non-linearities in the process
+
+# - choose the best model and compare it with a model that relies on sampling days only...
+
+
+
+
+# to do: 
+# i) implement the switch function that defines whether an hour was suitable for wild-bee pollination
+# ii) create a grid that contains different constants defining the switch function
+# iii) sum the scores up for each hour within a sampling season for each combination of constants in the grid
+#       this results in a suitability score for each sampling period
+# iv) create regression models that evaluates whether the suitability score is a better predictor of abundance
+#       and richness than simply the number of exposure days;
+# point five would be tricky - we have to account for 
+#     - random effects (site, location, year)
+#     - other fixed effects (year, elevation, habitat diversity stuff??)
+#     - things we are truly interested in (season, suitability score and their interaction)
 
 

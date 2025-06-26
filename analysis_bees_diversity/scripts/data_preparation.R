@@ -421,7 +421,7 @@ for (i in 1:nrow(meta)){
 rm(spring.month, spring.day, dyear.spring, dates.spring, startend.spring,
    summer.month, summer.day, dyear.summer, dates.summer, startend.summer)
 
-# save the list as file
+# save the list as file (open with readRDS)
 saveRDS(sampling.days, file="analysis_bees_diversity/data/sampling_days_siteyseason.RData")
 write.csv(meta.sampling.days, 'analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv')
 

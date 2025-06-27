@@ -12,7 +12,7 @@ getwd()
 ## Load Libraries ############################################################# 
 library(rdwd); library(RCurl); library(dplyr); library(readxl); library(terra); library(lubridate); 
 library(tidyr); library(dwdradar)
-#rdwd::updateRdwd()
+rdwd::updateRdwd()
 
 
 ### 1. check available .nc-files on the dwd FTP server -------
@@ -33,6 +33,7 @@ ftp.files <- indexFTP("/air_temperature_mean", base=rasterbase, dir=tempdir())
 # --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
 # --> xth day, y o'clock = (x-1)*24 + y
 
+# example data: 
 link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025030100-2025033123.nc"  #  5 MB
 file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
@@ -40,23 +41,15 @@ plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
 
 # 1.2 Precipitation data: ASCII Format
 
-link <- "hourly/radolan/recent/asc/RW-20250101.tar.gz" # 0.2 MB
-file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-rad <- readDWD(file) # with dividebyten=TRUE
-rad <- readDWD(file) # runs faster at second time due to skip=TRUE
+# recent: 2005-06-01 until 2020-12-31
+# example data: 
+link <- "hourly/radolan/recent/bin/raa01-rw_10000-2501010000-dwd---bin.gz" # 25 mB
+file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
+rad <- readDWD(file)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 
+# historical: 2005-06-01 until today
 
-link <- "hourly/radolan/reproc/2017_002/bin/2017/RW2017.002_201712.tar.gz"  # 25 MB
-file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-rad <- readDWD(file, exdir=tempdir(), selection=1:3)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
-##
-##
-# to be done
-##
-##
-##
 
 
 # 1.3 reference raster
@@ -114,6 +107,9 @@ sites_id_2010 <- cbind(sites_2010, cell_id)
 # read prepared sampling data:
 data_sampling <- readRDS("analysis_bees_diversity/data/sampling_days_siteyseason.RData")
 data_samp_clim <- data_sampling
+
+# load metadata:
+meta <- read.csv("analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv")
 
 # test data on sampling period:
 test_sampling <- read_excel("analysis_bees_diversity/data/data_raw/data_climate/test_sampling_period.xlsx")
@@ -224,7 +220,10 @@ daytime_hours$sunset_hour <- format(daytime_hours$sunset_hour, "%H:%M:%S")
     data_samp_clim[[i]] <- dplyr::filter(data_samp_clim[[i]],  !is.na(hour))
     
     data_samp_clim[[i]]$hour <- strptime(data_samp_clim[[i]]$hour, format = "%H:%M:%S") ## alternative: add time information to column 'date'
-    }
+  }
+
+
+
 
 ## 4.1 extract climate data from raster
 # select proper .nc file and within there: proper raster 
@@ -299,13 +298,71 @@ for(i in 1:length(data_samp_clim)){
 
 
 # 4.2 extract climate data from raster
-test_sampling_l$temp <- NA
+
+
+# information on site of data.frame i in list data_samp_clim: 
+meta[i,2]
+# get cell number of respective site:
+sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
+
+
+#for(i in 1:length(data_samp_clim)){
+for(i in 1:5){
+  data_samp_clim[[i]]$temp <- NA
+  
+  for(j in 1:length(unique(data_samp_clim[[i]]$nc_temp))){
+    link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(data_samp_clim[[i]]$nc_temp)[j])
+    file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
+    rad <- readDWD(file) 
+    
+    for (k in 1:nrow(data_samp_clim[[i]])){
+      if((data_samp_clim[[i]]$nc_temp[k] == unique(data_samp_clim[[i]]$nc_temp)[j]) == TRUE) {
+        data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
+        }
+    else{}
+      }
+    
+  }
+
+  case_when
+  
+  link <- paste0("/hourly/hostrada/air_temperature_mean/",data_samp_clim[[i]]$nc_temp)  #  5 MB
+  file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
+  rad <- readDWD(file) 
+  test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
+  
+  # # check if data.frame covers spring or summer season
+  # if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
+  #   # get day: 
+  #   x <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%d"))
+  #   # get hour:
+  #   y <- as.numeric(format(data_samp_clim[[i]]$hour, "%H"))
+  # }else{
+  #   # get day: 
+  #   x <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%d"))
+  #   # get hour:
+  #   y <- as.numeric(format(data_samp_clim[[i]]$hour, "%H"))
+  # }
+  # raster_nr <- (x-1)*24+1 + y
+  # data_samp_clim[[i]]$raster_nr<- raster_nr
+}
+
+test_sites_id_2010test_sampling_l$temp <- NA
 for(i in 1:nrow(test_sampling_l)){
   link <- paste0("/hourly/hostrada/air_temperature_mean/",test_sampling_l$nc_temp[[i]])  #  5 MB
   file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
   rad <- readDWD(file) 
   test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
 }
+
+
+# test_sites_id_2010test_sampling_l$temp <- NA
+# for(i in 1:nrow(test_sampling_l)){
+#   link <- paste0("/hourly/hostrada/air_temperature_mean/",test_sampling_l$nc_temp[[i]])  #  5 MB
+#   file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
+#   rad <- readDWD(file) 
+#   test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
+# }
 
 
 

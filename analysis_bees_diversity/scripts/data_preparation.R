@@ -282,6 +282,7 @@ length(which(meta$total.exposure<64))
 length(which(meta$total.exposure<69))
 
 rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
+rm(data_10_19, data_19_21)
 
 ### 8) create species matrices (abundance and biomass)
 
@@ -295,7 +296,7 @@ spec.list<- spec.list[which(spec.list!='Apis mellifera')]
 cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list), rep(0,nrow(meta)* length(spec.list)))
 colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
 
-# (iii) create matrix total abundance combined (f and m (without communal species))
+# (iii) create matrix total abundance combined (f and m (without m of communal species))
 # create new column on abundance of both females and males
 # use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
 dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
@@ -317,9 +318,47 @@ for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqu
                                         subset$abundance_total[i]}
 
 cm.ab.total<- cm.ab.summer+cm.ab.spring
-rm(subset)
+rm(subset, cm.base)
 
-# (iv) create matrix total biomass combined (f and m (without communal species))
+# (iv) create meta-data with richness and abundance information at the site-year-season level
+
+# compute total abundance and richness
+x<-aggregate (abundance_year_trap$abundance_total, by=list(
+  abundance_year_trap$LocName, abundance_year_trap$LocTrap, abundance_year_trap$year,
+  abundance_year_trap$season), function(x){sum(x)})
+y<-aggregate (abundance_year_trap$abundance_total, by=list(
+  abundance_year_trap$LocName, abundance_year_trap$LocTrap, abundance_year_trap$year,
+  abundance_year_trap$season), function(x){length(unique(x))})
+
+# some diagnostics
+sum(x$x); mean(y$x) # we have in total 190627 individuals and on average 84 per season from 5.8 species
+
+meta.trapyearseason<- cbind(x,y$x)
+colnames(meta.trapyearseason)<-c('location','site','year','season', 'abundance','richness')
+
+# add exposure days to the meta-data
+# create ID to link the two files (target and meta file that contains the desired info)
+ID_meta_trapyearseason<-paste0(meta.trapyearseason$site, meta.trapyearseason$year)
+ID_meta<-paste0(meta$LocTrap, meta$year)
+
+# create column in target
+meta.trapyearseason$exposure_days<-NA
+
+# define which columns to select for spring and summer season
+spri<-which(meta.trapyearseason$season=='spring')
+summ<-which(meta.trapyearseason$season=='summer')
+
+# add info
+meta.trapyearseason$exposure_days[spri]<- meta$spring.exposure[match(ID_meta_trapyearseason[spri], ID_meta)]
+meta.trapyearseason$exposure_days[summ]<- meta$summer.exposure[match(ID_meta_trapyearseason[summ], ID_meta)]
+
+# check whether we have somewhere a mistake
+which(is.na(meta.trapyearseason$exposure_days))
+
+write.csv(meta.trapyearseason, 'analysis_bees_diversity/data/meta.trapyearseason.csv', row.names = F)
+rm(x,y, ID_meta_trapyearseason, ID_meta, spri, summ)
+
+# (v) create matrix total biomass combined (f and m (without communal species))
 # create new column on abundance of both females and males
 
 # add length data to abundance data on year-trap-season level and calculate biomass:
@@ -339,20 +378,10 @@ which(abundance_year_trap$GenSpec=="Sphaecodes miniatus" == TRUE)
 abundance_year_trap$uniqueID[which(abundance_year_trap$GenSpec=="Sphaecodes miniatus")]
 abundance_year_trap$uniqueID[which(abundance_year_trap$GenSpec=="Sphecodes miniatus")]
 
-cm.ab.spring<-cm.base
-subset<-abundance_year_trap[which(abundance_year_trap$season=='spring'),]
-for(i in 1:nrow(subset)){cm.ab.spring[which(rownames(cm.ab.spring)==subset$uniqueID[i]), which(colnames(cm.ab.spring)==subset$GenSpec[i])]<-
-  subset$abundance_total[i]}
+########## B) New section to fill : ) #########
 
-cm.ab.summer<-cm.base
-subset<-abundance_year_trap[which(abundance_year_trap$season=='summer'),]
-for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqueID[i]), which(colnames(cm.ab.summer)==subset$GenSpec[i])]<-
-  subset$abundance_total[i]}
 
-cm.ab.total<- cm.ab.summer+cm.ab.spring
-rm(subset)
-
-########## B) Create a list that contains for each year-season-site combination the exposure days #########
+########## C) Create a list that contains for each year-season-site combination the exposure days #########
 sampling.days<-list(); meta.sampling.days<-c()
 
 for (i in 1:nrow(meta)){
@@ -425,7 +454,7 @@ rm(spring.month, spring.day, dyear.spring, dates.spring, startend.spring,
 saveRDS(sampling.days, file="analysis_bees_diversity/data/sampling_days_siteyseason.RData")
 write.csv(meta.sampling.days, 'analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv')
 
-########## C) Comparison of spring and summer data #########
+########## D) Comparison of spring and summer data #########
 
 ### 1) create a first overview of the total abundance ratios
 # create a ratio between summer and spring abundance that takes the exposure days of the seasons into account

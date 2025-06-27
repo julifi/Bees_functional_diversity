@@ -7,7 +7,7 @@ install.packages('dwdradar')
 
 # BEFORE: run setting.R
 getwd()
-
+tempdir <- "Y:/Home/fischjul/Arbeit_aktuell/temp"
 
 ## Load Libraries ############################################################# 
 library(rdwd); library(RCurl); library(dplyr); library(readxl); library(terra); library(lubridate); 
@@ -44,7 +44,7 @@ plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
 # recent: 2005-06-01 until 2020-12-31
 # example data: 
 link <- "hourly/radolan/recent/bin/raa01-rw_10000-2501010000-dwd---bin.gz" # 25 mB
-file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
+file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
 rad <- readDWD(file)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 
@@ -54,7 +54,7 @@ plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 
 # 1.3 reference raster
 link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025040100-2025043023.nc"  #  5 MB
-file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
+file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
 plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
 
@@ -107,12 +107,9 @@ sites_id_2010 <- cbind(sites_2010, cell_id)
 # read prepared sampling data:
 data_sampling <- readRDS("analysis_bees_diversity/data/sampling_days_siteyseason.RData")
 data_samp_clim <- data_sampling
-
+data_samp_clim_t2 <- data_sampling
 # load metadata:
 meta <- read.csv("analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv")
-
-# test data on sampling period:
-test_sampling <- read_excel("analysis_bees_diversity/data/data_raw/data_climate/test_sampling_period.xlsx")
 
 # add column with 'hour'; replicate each row 23times --> for 'hour' passing values from 00:00:00 to 23:00:00
 # create vector with values from 00:00 to 23:00 
@@ -121,33 +118,6 @@ z <- format(z, "%H:%M:%S")
 z <- head(z,-1)
 z2 <- do.call(paste, c(as.list(z), sep = ", "))
 
-# add new column 'hours' to list with data.frames
-#test_sampling$hour <- z2
-
-## TEST data: 
-# # split new column into separate rows and multiply each day-row into 24 day-hour-rows:
-# test_sampling_l <- 
-#   test_sampling %>% 
-#   separate_longer_delim(hour, delim = ", ")
-# # remove certain hours for start and end days (outside of sampling hours): 
-# ## start days: remove hours < 12 pm
-# ## end days: remove hours > 12 pm
-# test_sampling_l$hour <- ifelse((test_sampling_l$`start/end` == 1 & test_sampling_l$hour < "12:00:00"), NA, ifelse(
-#   (test_sampling_l$`start/end` == 1 & test_sampling_l$hour >= "12:00:00"), test_sampling_l$hour, ifelse(
-#     (test_sampling_l$`start/end` == 2 & test_sampling_l$hour >= "12:00:00"), NA, ifelse(
-#       (test_sampling_l$`start/end` == 2 & test_sampling_l$hour < "12:00:00"), test_sampling_l$hour, test_sampling_l$hour))))
-# # remove rows with NAs within column 'hour' (as these fall outside the sampling hours within start or end days)
-# test_sampling_l <- dplyr::filter(test_sampling_l,  !is.na(hour))
-# 
-# test_sampling_l$hour <- strptime(test_sampling_l$hour, format = "%H:%M:%S") ## alternative: add time information to column 'date'
-# 
-# # add information on site coordinates and cell_id
-# test_sampling_l <- left_join(test_sampling_l, sites_id_2010, by = "Trap")
-
-
-# # create string with trap/site names in order to add column with site/trap names --> replicate each row for all site/traps
-# traps <- do.call(paste, c(as.list(sites_2010$Trap), sep = ", "))
-
 # refine daytime
 # load data on daytime hours: 
 daytime_hours <- read_excel("analysis_bees_diversity/data/data_raw/data_climate/daytime_hours.xlsx", sheet = "daytime_hours")
@@ -155,83 +125,81 @@ daytime_hours <- daytime_hours[c("month", "sunrise_hour", "sunset_hour")]
 daytime_hours$sunrise_hour <- format(daytime_hours$sunrise_hour, "%H:%M:%S")
 daytime_hours$sunset_hour <- format(daytime_hours$sunset_hour, "%H:%M:%S")
 
-
-  for(i in 1:length(data_samp_clim)){
+# split day-rows in data.frames of list 'data_samp_clim' into day-hour-rows
+for(i in 1:length(data_samp_clim)){
     
-    # add new column 'hours' to list with data.frames
-    data_samp_clim[[i]]$hour <- z2
+  # add new column 'hours' to list with data.frames
+  data_samp_clim[[i]]$hour <- z2
     
-    # split new column into separate rows and multiply each day-row into 24 day-hour-rows:
-    data_samp_clim[[i]] <- 
-      data_samp_clim[[i]] %>% 
-      separate_longer_delim(hour, delim = ", ")
+  # split new column into separate rows and multiply each day-row into 24 day-hour-rows:
+  data_samp_clim[[i]] <- 
+    data_samp_clim[[i]] %>% 
+    separate_longer_delim(hour, delim = ", ")
     
-    # remove hours for start and end days (outside of sampling hours): 
-    ## start days: remove hours < 12 pm
-    ## end days: remove hours > 12 pm
+  # remove hours for start and end days (outside of sampling hours): 
+  ## start days: remove hours < 12 pm
+  ## end days: remove hours > 12 pm
     
-    # check if data.frame covers spring or summer season
-    if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
-      data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                  ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                  ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                  ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
+  # check if data.frame covers spring or summer season
+  if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
+    data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
+                                ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+                                ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+                                ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
   
-      # get month to exclude non-daytime hours: 
-      m <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%m"))
+    # get month to exclude non-daytime hours: 
+    m <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%m"))
       
-      }else{
-      data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                  ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                  ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                  ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
-      # get month to exclude non-daytime hours: 
-      m <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%m"))
-      }
+    }else{
+    data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
+                                ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+                                ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+                                ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
+    # get month to exclude non-daytime hours: 
+    m <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%m"))
+    }
     
   
-    # exclude non-daytime hours
-    data_samp_clim[[i]]$hour <- ifelse((m == 1 & data_samp_clim[[i]]$hour < "08:00:00"), NA, 
-                                ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
-                                ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
-                                ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
-                                ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
+  # exclude non-daytime hours
+  data_samp_clim[[i]]$hour <- ifelse((m == 1 & data_samp_clim[[i]]$hour < "08:00:00"), NA, 
+                              ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
+                              ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+                              ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+                              ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+                              ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+                              ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+                              ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+                              ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+                              ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+                              ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+                              ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+                              ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+                              ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+                              ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+                              ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+                              ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+                              ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+                              ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+                              ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
+                              ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+                              ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
+                              ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+                              ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
     
-     # remove rows with NAs within column 'hour' (as these fall outside the sampling hours within start or end days)
-    data_samp_clim[[i]] <- dplyr::filter(data_samp_clim[[i]],  !is.na(hour))
-    
-    data_samp_clim[[i]]$hour <- strptime(data_samp_clim[[i]]$hour, format = "%H:%M:%S") ## alternative: add time information to column 'date'
-  }
+  # remove rows with NAs within column 'hour' (as these fall outside the sampling hours within start or end days)
+  data_samp_clim[[i]] <- dplyr::filter(data_samp_clim[[i]],  !is.na(hour))
+  
+  data_samp_clim[[i]]$hour <- strptime(data_samp_clim[[i]]$hour, format = "%H:%M:%S") ## alternative: add time information to column 'date'
+}
 
 
+## 4.1 extract climate data from raster  
+# 4.1.1 Temperature data
 
-
-## 4.1 extract climate data from raster
 # select proper .nc file and within there: proper raster 
 # year + month --> select .nc file
 # day + start/end (+ daytime) --> select raster within .nc file
 
-
-# 4.1.1 Temperature data
 # get name of .nc file of interest
 # tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
 
@@ -258,16 +226,6 @@ for(i in 1:length(data_samp_clim)){
 # --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
 # --> xth day, y o'clock = (x-1)*24 + y
 
-test_sampling_l$raster_nr <- NA
-for(i in 1:nrow(test_sampling_l)){
-  # get day: 
-  x <- as.numeric(format(test_sampling_l[i,]$date, "%d"))
-  # get hour:
-  y <- as.numeric(format(test_sampling_l[i,]$hour, "%H"))
-  raster_nr <- (x-1)*24+1 + y
-  test_sampling_l$raster_nr[i] <- raster_nr
-}
-
 for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$raster_nr <- NA
   
@@ -292,79 +250,97 @@ for(i in 1:length(data_samp_clim)){
 ##
 ##
 # to be done
-##
-##
-##
 
 
 # 4.2 extract climate data from raster
 
+# # information on site of data.frame i in list data_samp_clim: 
+# meta[i,2]
+# # get cell number of respective site:
+# sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
 
-# information on site of data.frame i in list data_samp_clim: 
-meta[i,2]
-# get cell number of respective site:
-sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
-
-
-#for(i in 1:length(data_samp_clim)){
-for(i in 1:5){
+#for(i in 50:length(data_samp_clim)){
+for(i in 51:60){
+  print(i)
+  
   data_samp_clim[[i]]$temp <- NA
   
   for(j in 1:length(unique(data_samp_clim[[i]]$nc_temp))){
     link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(data_samp_clim[[i]]$nc_temp)[j])
-    file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
+    file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
     rad <- readDWD(file) 
     
     for (k in 1:nrow(data_samp_clim[[i]])){
       if((data_samp_clim[[i]]$nc_temp[k] == unique(data_samp_clim[[i]]$nc_temp)[j]) == TRUE) {
-        data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
-        }
-    else{}
+        
+        # chose raster file within .nc file
+        raster_nr <- data_samp_clim[[i]]$raster_nr[k]
+        raster <- rad[[raster_nr]]
+        
+        # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
+        data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
       }
-    
+      else{}
+    }
   }
-
-  case_when
-  
-  link <- paste0("/hourly/hostrada/air_temperature_mean/",data_samp_clim[[i]]$nc_temp)  #  5 MB
-  file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-  rad <- readDWD(file) 
-  test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
-  
-  # # check if data.frame covers spring or summer season
-  # if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
-  #   # get day: 
-  #   x <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%d"))
-  #   # get hour:
-  #   y <- as.numeric(format(data_samp_clim[[i]]$hour, "%H"))
-  # }else{
-  #   # get day: 
-  #   x <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%d"))
-  #   # get hour:
-  #   y <- as.numeric(format(data_samp_clim[[i]]$hour, "%H"))
-  # }
-  # raster_nr <- (x-1)*24+1 + y
-  # data_samp_clim[[i]]$raster_nr<- raster_nr
-}
-
-test_sites_id_2010test_sampling_l$temp <- NA
-for(i in 1:nrow(test_sampling_l)){
-  link <- paste0("/hourly/hostrada/air_temperature_mean/",test_sampling_l$nc_temp[[i]])  #  5 MB
-  file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-  rad <- readDWD(file) 
-  test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
 }
 
 
-# test_sites_id_2010test_sampling_l$temp <- NA
-# for(i in 1:nrow(test_sampling_l)){
-#   link <- paste0("/hourly/hostrada/air_temperature_mean/",test_sampling_l$nc_temp[[i]])  #  5 MB
+data_clim <- data_samp_clim
+# remove unimportant information 
+for(i in 1:length(data_clim)){
+  data_clim[[i]] <- data_clim[[i]][c("temp")]
+}
+
+
+
+# ## ALTERNATIVE: 
+# data_samp_clim_t2 <- data_samp_clim
+# 
+# # create vector with unique .nc filenames of each data.frame
+# nc_vec <- vector()
+# for(i in 1:length(data_samp_clim)){
+#   
+#   vec_temp <- unique(data_samp_clim[[i]]$nc_temp)
+#   nc_vec <- c(nc_vec, vec_temp)
+# 
+# }
+# # create vector with unique .nc filenames of the whole list
+# nc_unique <- unique(nc_vec)
+# 
+# start.time <- Sys.time()
+# for(j in 1:length(unique(nc_unique))){
+#   print(j)
+#   
+#   link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(nc_unique)[j])
 #   file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
 #   rad <- readDWD(file) 
-#   test_sampling_l$temp[[i]] <- (terra::extract(raster, test_sampling_l$cell_id[[i]]))[[1]]
+#   
+#  # for(i in 1:length(data_samp_clim)){
+#     for(i in 9:20){
+#     print(i)
+#     data_samp_clim_t2[[i]]$temp <- NA
+#     
+#     for (k in 1:nrow(data_samp_clim_t2[[i]])){
+#       if((data_samp_clim_t2[[i]]$nc_temp[k] == unique(nc_unique)[j]) == TRUE) {
+#         
+#         # chose raster file within .nc file
+#         raster_nr <- data_samp_clim_t2[[i]]$raster_nr[k]
+#         raster <- rad[[raster_nr]]
+#         
+#         # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
+#         data_samp_clim_t2[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
+#       }
+#       else{}
+#     }
+#   }
 # }
+# end.time <- Sys.time()
+# time.taken <- end.time - start.time
+# time.taken
 
 
+data_samp_clim[[i]]
 
 ## 5. compute suitability scores for wild-bee pollination for each sampling interval  -------
 

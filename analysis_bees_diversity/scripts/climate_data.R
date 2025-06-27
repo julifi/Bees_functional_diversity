@@ -426,6 +426,18 @@ abund.1<-lmer(data= meta.trapyearseason,
                 (1|location)+(1|year)+(1|site), REML = T)
 summary(abund.1)
 
+
+rich.1<-lmer(data= meta.trapyearseason, 
+              richness~ exposure_days + season + exposure_days:season + 
+                elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
+                (1|location)+(1|year)+(1|site), REML = T)
+summary(rich.1)
+
+library(performance) 
+r2(rich.1)
+r2(abund.1)
+
+
 library(ggplot2)
 
 # look at abundance trend over time... 
@@ -436,6 +448,12 @@ str(meta.trapyearseason)
 # IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
 
 ### 8. start modelling the grid for the suitability score and identify the best solution  -------
+
+# run the regression analysis for all constant combinations...
+for(i in 1:ncol(output)){print(i)
+  meta.trapyearseason$suitability<-output[,i]
+}
+
 
 
 

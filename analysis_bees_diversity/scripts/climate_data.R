@@ -155,6 +155,58 @@ output<-cbind(output, output.period)
 
 rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
 
+### 6. load in predictors and response variables and prepare them  -------
+
+# load in data
+meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
+site.env.data<-read.csv('analysis_bees_diversity/data/env_data_ecosystematlas_elevation.csv', 
+                        dec = '.', sep = ',')
+
+# match site.data with meta-data
+matching<-match(meta.trapyearseason$site, site.env.data$TRAP)
+site.env.data<-site.env.data[matching,]
+site.env.data<-site.env.data[,-which(colnames(site.env.data)=='YEAR')]
+
+# compute additional predictors 
+# habitat richness: should probably only be calculated from semi-natural habitats
+library(vegan)
+seminat<- colnames(site.env.data)[c(5,8:12,16)]
+meta.trapyearseason$hab.div<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){length(which(x>0))})
+meta.trapyearseason$hab.even<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){
+  diversity(x, index = 'shannon')/log(specnumber(x))})
+meta.trapyearseason$hab.proportion<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){sum(x)})
+
+rm(seminat)
+
+# add the elevation data to the meta data
+meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
+meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
+
+### 7. start modelling the impact of exposure time on abundance and richness  -------
+library(lme4); library(lmerTest)
+abund.1<-lmer(data= meta.trapyearseason, 
+              abundance~ exposure_days + season + exposure_days:season + 
+                elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
+                (1|location)+(1|year)+(1|site), REML = T)
+abund.1<-lmer(data= meta.trapyearseason, 
+              abundance~ exposure_days + season + exposure_days:season + 
+                elevation_mean_400m + elevation_range_400m + year +
+                (1|location)+(1|year)+(1|site), REML = T)
+summary(abund.1)
+
+library(ggplot2)
+
+# look at abundance trend over time... 
+ggplot(data= meta.trapyearseason, aes(x=year,))
+
+colnames(meta.trapyearseason)
+str(meta.trapyearseason)
+# IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
+
+### 8. start modelling the grid for the suitability score and identify the best solution  -------
+
+
+
 # next steps:
 # - load in the other predictors and the random effect variables. 
 # - establish the regression model structure and let it run for all data combinations; play around with

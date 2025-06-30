@@ -11,25 +11,28 @@ library(tidyr); library(dwdradar)
 # currently available files in a given folder:
 
 # 1.1 Temperature data: 
+## .nc files containing hourly temperature data for one month: 
+## The name of the NetCDF file is formed as follows: parameter abbreviation}_{time resolution}_{process name version}_{variant}_{grid_info}_{time coverage}.nc
+## (variant: BE - best estimate; grid_info: gn - native grid), e.g. tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
+## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
+
 rasterbase <- paste0(gridbase,"/hourly/hostrada")
 ftp.files <- indexFTP("/air_temperature_mean", base=rasterbase, dir=tempdir())
-
-## example: temperature data: 
-## .nc files containing hourly temperature data for one month: 
-# The name of the NetCDF file is formed as follows:
-# parameter abbreviation}_{time resolution}_{process name version}_{variant}_{grid_info}_{time coverage}.nc
-# (variant: BE - best estimate; grid_info: gn - native grid), e.g.
-# tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
-
-## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
-# --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
-# --> xth day, y o'clock = (x-1)*24 + y
 
 # example data: 
 link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025030100-2025033123.nc"  #  5 MB
 file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
-plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
+#plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
+
+
+# temperature reference raster
+link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025040100-2025043023.nc"  #  5 MB
+file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
+rad <- readDWD(file) # can also have interactive selection of variable
+plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
+# set reference raster: rad[[1]]
+raster <- rad[[1]]
 
 # 1.2 Precipitation data: ASCII Format
 
@@ -38,20 +41,13 @@ plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
 link <- "hourly/radolan/recent/bin/raa01-rw_10000-2501010000-dwd---bin.gz" # 25 mB
 file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
 rad <- readDWD(file)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
+#plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 
 # historical: 2005-06-01 until today
 
+# precipitation reference raster
+#raster_prec <- 
 
-
-# 1.3 reference raster
-link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025040100-2025043023.nc"  #  5 MB
-file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
-rad <- readDWD(file) # can also have interactive selection of variable
-plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
-
-# set reference raster: rad[[1]]
-raster <- rad[[1]]
 
 
 ### 2. load spatial data of TERENO sites --------------
@@ -183,15 +179,11 @@ for(i in 1:length(data_samp_clim)){
 ## 4.1 extract climate data from raster  
 # 4.1.1 Temperature data
 
-# select proper .nc file and within there: proper raster 
-# year + month --> select .nc file
-# day + start/end (+ daytime) --> select raster within .nc file
+# select proper .nc file and within there: proper raster: 
+# 1. year + month --> select .nc file 
+# 2. day + start/end (+ daytime) --> select raster within .nc file
 
-# get name of .nc file of interest
-# tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
-
-#test_sampling_l$nc_temp <- NA
-
+# 1. retrieve name of .nc file of interest: e.g. tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
 for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$nc_temp <- NA
   
@@ -208,7 +200,7 @@ for(i in 1:length(data_samp_clim)){
 }
 
 
-# get number of raster file within the .nc file
+# 2. get number of raster file within the .nc file
 ## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
 # --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
 # --> xth day, y o'clock = (x-1)*24 + y
@@ -233,7 +225,7 @@ for(i in 1:length(data_samp_clim)){
 }
 
 # add cell ID to meta-data
-meta$cellID<-sites_2010$cell_id[ match(meta$LocTrap, sites_2010$Trap)]
+meta$cellID<-sites_2010$cell_id[match(meta$LocTrap, sites_2010$Trap)]
 
 all.dat<-c()
 for(i in 1:length(data_samp_clim)){
@@ -267,6 +259,7 @@ for(i in 1:length(unique.nc)){
     colnames(extracted)[1]<-c('temp')
     extracted.data<-rbind(extracted.data, extracted)
   }
+}
   
   ### next steps:
   #(i) find mistakes and get this to work and clean up the code
@@ -275,239 +268,190 @@ for(i in 1:length(unique.nc)){
   #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
   #(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
   #     for co-lineraity, non-linearty and different scales
-  
   # (v) look as seasonality effects
   
   
   
   
-  # 4.1.2 Precipitation data
+# 4.1.2 Precipitation data
+
+##
+##
+# to be done
+
+
+# 4.2 extract climate data from raster
+
+# # information on site of data.frame i in list data_samp_clim: 
+# meta[i,2]
+# # get cell number of respective site:
+# sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
+
+#for(i in 50:length(data_samp_clim)){
+for(i in 51:60){
+  print(i)
   
-  ##
-  ##
-  # to be done
+  data_samp_clim[[i]]$temp <- NA
   
-  
-  # 4.2 extract climate data from raster
-  
-  # # information on site of data.frame i in list data_samp_clim: 
-  # meta[i,2]
-  # # get cell number of respective site:
-  # sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
-  
-  #for(i in 50:length(data_samp_clim)){
-  for(i in 51:60){
-    print(i)
+  for(j in 1:length(unique(data_samp_clim[[i]]$nc_temp))){
+    link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(data_samp_clim[[i]]$nc_temp)[j])
+    file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
+    rad <- readDWD(file) 
     
-    data_samp_clim[[i]]$temp <- NA
-    
-    for(j in 1:length(unique(data_samp_clim[[i]]$nc_temp))){
-      link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(data_samp_clim[[i]]$nc_temp)[j])
-      file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
-      rad <- readDWD(file) 
-      
-      for (k in 1:nrow(data_samp_clim[[i]])){
-        if((data_samp_clim[[i]]$nc_temp[k] == unique(data_samp_clim[[i]]$nc_temp)[j]) == TRUE) {
-          
-          # chose raster file within .nc file
-          raster_nr <- data_samp_clim[[i]]$raster_nr[k]
-          raster <- rad[[raster_nr]]
-          
-          # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
-          data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
-        }
-        else{}
+    for (k in 1:nrow(data_samp_clim[[i]])){
+      if((data_samp_clim[[i]]$nc_temp[k] == unique(data_samp_clim[[i]]$nc_temp)[j]) == TRUE) {
+        
+        # chose raster file within .nc file
+        raster_nr <- data_samp_clim[[i]]$raster_nr[k]
+        raster <- rad[[raster_nr]]
+        
+        # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
+        data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
       }
+      else{}
     }
   }
+}
+
   
-  
-  data_clim <- data_samp_clim
-  # remove unimportant information 
-  for(i in 1:length(data_clim)){
-    data_clim[[i]] <- data_clim[[i]][c("temp")]
+data_clim <- data_samp_clim
+# remove unimportant information 
+for(i in 1:length(data_clim)){
+  data_clim[[i]] <- data_clim[[i]][c("temp")]
+}
+
+    data_samp_clim[[i]]
+
+
+# 5. compute suitability scores for wild-bee pollination for each sampling interval  -------
+
+# there are three constants in the formula that defines the suitability of temp for pollination
+# here, we define their range
+t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
+t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
+sigma <- seq(0.5,5, length=10) # defines the shape of the sigmodid shape of bee activity below t.opt
+constants.grid<- expand.grid(t.opt, t.max, sigma)
+names(constants.grid) <- c("t.opt", "t.max", "sigma")
+# account for the fact that max temp needs to be at least 1 degree above opt. temperature
+constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max+1),]
+rm(t.opt, t.max, sigma)
+
+# we create a procedure that will be implemented for each sampling period in a loop
+for (i in 1:length(input.data)){
+  placeholder<-  input.data[[i]] # we extract the climate data of a given sampling period
+  # for now, we assume made-up data, we can delete this later... 
+  placeholder<- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
+  # prepare output data-frame for a given sampling period
+  output.period<-c()
+  # we compute for each hour the suitability score for each combinations of constants in the grid
+  for(j in 1:nrow(constants.grid)){
+    suitability.estimate<-rep(0, nrow(placeholder)) #we create a vector for the suitability scores for each hr
+    
+    #define which hrs had a rainfall of 0 and temp below or above the optimum
+    below.opt<-which(placeholder$rainfall==0 & placeholder$temp <= constants.grid$t.opt[j])
+    above.opt<-which(placeholder$rainfall==0 & placeholder$temp > constants.grid$t.opt[j])
+    
+    # compute the suitability score for temp above and below the temp optimum separately 
+    suitability.estimate[below.opt]<- exp(-((placeholder$temp[below.opt]-constants.grid$t.opt[j])/
+                                            (2*constants.grid$sigma[j]))^2)
+    suitability.estimate[above.opt]<- 1-((placeholder$temp[above.opt]-constants.grid$t.opt[j])/
+                                         (constants.grid$t.opt[j]- constants.grid$t.max[j]))^2
+    
+    # negative suitability values need to be set to 0
+    suitability.estimate[which(suitability.estimate<0)]<-0
+    
+    # output for each sampling period needs to be prepared and saved
+    suitability.score<-sum(suitability.estimate)
+    output.period<-c(output.period, suitability.score)
   }
-  
-  
-  
-  # ## ALTERNATIVE: 
-  # data_samp_clim_t2 <- data_samp_clim
-  # 
-  # # create vector with unique .nc filenames of each data.frame
-  # nc_vec <- vector()
-  # for(i in 1:length(data_samp_clim)){
-  #   
-  #   vec_temp <- unique(data_samp_clim[[i]]$nc_temp)
-  #   nc_vec <- c(nc_vec, vec_temp)
-  # 
-  # }
-  # # create vector with unique .nc filenames of the whole list
-  # nc_unique <- unique(nc_vec)
-  # 
-  # start.time <- Sys.time()
-  # for(j in 1:length(unique(nc_unique))){
-  #   print(j)
-  #   
-  #   link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(nc_unique)[j])
-  #   file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-  #   rad <- readDWD(file) 
-  #   
-  #  # for(i in 1:length(data_samp_clim)){
-  #     for(i in 9:20){
-  #     print(i)
-  #     data_samp_clim_t2[[i]]$temp <- NA
-  #     
-  #     for (k in 1:nrow(data_samp_clim_t2[[i]])){
-  #       if((data_samp_clim_t2[[i]]$nc_temp[k] == unique(nc_unique)[j]) == TRUE) {
-  #         
-  #         # chose raster file within .nc file
-  #         raster_nr <- data_samp_clim_t2[[i]]$raster_nr[k]
-  #         raster <- rad[[raster_nr]]
-  #         
-  #         # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
-  #         data_samp_clim_t2[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
-  #       }
-  #       else{}
-  #     }
-  #   }
-  # }
-  # end.time <- Sys.time()
-  # time.taken <- end.time - start.time
-  # time.taken
-  
-  
-  data_samp_clim[[i]]
-  
-  
-## 5. compute suitability scores for wild-bee pollination for each sampling interval  -------
-  
-  # there are three constants in the formula that defines the suitability of temp for pollination
-  # here, we define their range
-  t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
-  t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
-  sigma <- seq(0.5,5, length=10) # defines the shape of the sigmodid shape of bee activity below t.opt
-  constants.grid<- expand.grid(t.opt, t.max, sigma)
-  names(constants.grid) <- c("t.opt", "t.max", "sigma")
-  # account for the fact that max temp needs to be at least 1 degree above opt. temperature
-  constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max+1),]
-  rm(t.opt, t.max, sigma)
-  
-  # we create a procedure that will be implemented for each sampling period in a loop
-  for (i in 1:length(input.data)){
-    placeholder<-  input.data[[i]] # we extract the climate data of a given sampling period
-    # for now, we assume made-up data, we can delete this later... 
-    placeholder<- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
-    # prepare output data-frame for a given sampling period
-    output.period<-c()
-    # we compute for each hour the suitability score for each combinations of constants in the grid
-    for(j in 1:nrow(constants.grid)){
-      suitability.estimate<-rep(0, nrow(placeholder)) #we create a vector for the suitability scores for each hr
-      
-      #define which hrs had a rainfall of 0 and temp below or above the optimum
-      below.opt<-which(placeholder$rainfall==0 & placeholder$temp <= constants.grid$t.opt[j])
-      above.opt<-which(placeholder$rainfall==0 & placeholder$temp > constants.grid$t.opt[j])
-      
-      # compute the suitability score for temp above and below the temp optimum separately 
-      suitability.estimate[below.opt]<- exp(-((placeholder$temp[below.opt]-constants.grid$t.opt[j])/
-                                                (2*constants.grid$sigma[j]))^2)
-      suitability.estimate[above.opt]<- 1-((placeholder$temp[above.opt]-constants.grid$t.opt[j])/
-                                             (constants.grid$t.opt[j]- constants.grid$t.max[j]))^2
-      
-      # negative suitability values need to be set to 0
-      suitability.estimate[which(suitability.estimate<0)]<-0
-      
-      # output for each sampling period needs to be prepared and saved
-      suitability.score<-sum(suitability.estimate)
-      output.period<-c(output.period, suitability.score)
-    }
-    output<-cbind(output, output.period)
-  }
-  rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
-  
-  ### 6. load in predictors and response variables and prepare them  -------
-  
-  # load in data
-  meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
-  site.env.data<-read.csv('analysis_bees_diversity/data/env_data_ecosystematlas_elevation.csv', 
-                          dec = '.', sep = ',')
-  
-  # match site.data with meta-data
-  matching<-match(meta.trapyearseason$site, site.env.data$TRAP)
-  site.env.data<-site.env.data[matching,]
-  site.env.data<-site.env.data[,-which(colnames(site.env.data)=='YEAR')]
-  
-  # compute additional predictors 
-  # habitat richness: should probably only be calculated from semi-natural habitats
-  library(vegan)
-  seminat<- colnames(site.env.data)[c(5,8:12,16)]
-  meta.trapyearseason$hab.div<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){length(which(x>0))})
-  meta.trapyearseason$hab.even<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){
-    diversity(x, index = 'shannon')/log(specnumber(x))})
-  meta.trapyearseason$hab.proportion<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){sum(x)})
-  
-  rm(seminat)
-  
-  # add the elevation data to the meta data
-  meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
-  meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
-  
-  ### 7. start modelling the impact of exposure time on abundance and richness  -------
-  library(lme4); library(lmerTest)
-  abund.1<-lmer(data= meta.trapyearseason, 
-                abundance~ exposure_days + season + exposure_days:season + 
-                  elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
-                  (1|location)+(1|year)+(1|site), REML = T)
-  abund.1<-lmer(data= meta.trapyearseason, 
-                abundance~ exposure_days + season + exposure_days:season + 
-                  elevation_mean_400m + elevation_range_400m + year +
-                  (1|location)+(1|year)+(1|site), REML = T)
-  summary(abund.1)
-  
-  
-  rich.1<-lmer(data= meta.trapyearseason, 
+  output<-cbind(output, output.period)
+}
+rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
+
+### 6. load in predictors and response variables and prepare them  -------
+
+# load in data
+meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
+site.env.data<-read.csv('analysis_bees_diversity/data/env_data_ecosystematlas_elevation.csv', 
+                        dec = '.', sep = ',')
+
+# match site.data with meta-data
+matching<-match(meta.trapyearseason$site, site.env.data$TRAP)
+site.env.data<-site.env.data[matching,]
+site.env.data<-site.env.data[,-which(colnames(site.env.data)=='YEAR')]
+
+# compute additional predictors 
+# habitat richness: should probably only be calculated from semi-natural habitats
+library(vegan)
+seminat<- colnames(site.env.data)[c(5,8:12,16)]
+meta.trapyearseason$hab.div<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){length(which(x>0))})
+meta.trapyearseason$hab.even<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){
+diversity(x, index = 'shannon')/log(specnumber(x))})
+meta.trapyearseason$hab.proportion<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){sum(x)})
+
+rm(seminat)
+
+# add the elevation data to the meta data
+meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
+meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
+
+### 7. start modelling the impact of exposure time on abundance and richness  -------
+library(lme4); library(lmerTest)
+abund.1<-lmer(data= meta.trapyearseason, 
+              abundance~ exposure_days + season + exposure_days:season + 
+                elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
+                (1|location)+(1|year)+(1|site), REML = T)
+abund.1<-lmer(data= meta.trapyearseason, 
+              abundance~ exposure_days + season + exposure_days:season + 
+                elevation_mean_400m + elevation_range_400m + year +
+                (1|location)+(1|year)+(1|site), REML = T)
+summary(abund.1)
+
+
+rich.1<-lmer(data= meta.trapyearseason, 
                richness~ exposure_days + season + exposure_days:season + 
-                 elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
-                 (1|location)+(1|year)+(1|site), REML = T)
-  summary(rich.1)
+               elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
+               (1|location)+(1|year)+(1|site), REML = T)
+summary(rich.1)
+
+library(performance) 
+r2(rich.1)
+r2(abund.1)
+
+
+library(ggplot2)
+
+# look at abundance trend over time... 
+ggplot(data= meta.trapyearseason, aes(x=year,))
+
+colnames(meta.trapyearseason)
+str(meta.trapyearseason)
+# IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
+
+### 8. start modelling the grid for the suitability score and identify the best solution  -------
+
+# run the regression analysis for all constant combinations...
+for(i in 1:ncol(output)){print(i)
+  meta.trapyearseason$suitability<-output[,i]
+}
+
+
+
   
-  library(performance) 
-  r2(rich.1)
-  r2(abund.1)
-  
-  
-  library(ggplot2)
-  
-  # look at abundance trend over time... 
-  ggplot(data= meta.trapyearseason, aes(x=year,))
-  
-  colnames(meta.trapyearseason)
-  str(meta.trapyearseason)
-  # IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
-  
-  ### 8. start modelling the grid for the suitability score and identify the best solution  -------
-  
-  # run the regression analysis for all constant combinations...
-  for(i in 1:ncol(output)){print(i)
-    meta.trapyearseason$suitability<-output[,i]
-  }
-  
-  
-  
-  
-  # next steps:
-  # - load in the other predictors and the random effect variables. 
-  # - establish the regression model structure and let it run for all data combinations; play around with
-  #       non-linearities in the process
-  # - choose the best model and compare it with a model that relies on sampling days only...
-  
-  # to do: 
-  # i) implement the switch function that defines whether an hour was suitable for wild-bee pollination
-  # ii) create a grid that contains different constants defining the switch function
-  # iii) sum the scores up for each hour within a sampling season for each combination of constants in the grid
-  #       this results in a suitability score for each sampling period
-  # iv) create regression models that evaluates whether the suitability score is a better predictor of abundance
-  #       and richness than simply the number of exposure days;
-  # point five would be tricky - we have to account for 
-  #     - random effects (site, location, year)
-  #     - other fixed effects (year, elevation, habitat diversity stuff??)
-  #     - things we are truly interested in (season, suitability score and their interaction)
+# next steps:
+# - load in the other predictors and the random effect variables. 
+# - establish the regression model structure and let it run for all data combinations; play around with
+#       non-linearities in the process
+# - choose the best model and compare it with a model that relies on sampling days only...
+
+# to do: 
+# i) implement the switch function that defines whether an hour was suitable for wild-bee pollination
+# ii) create a grid that contains different constants defining the switch function
+# iii) sum the scores up for each hour within a sampling season for each combination of constants in the grid
+#       this results in a suitability score for each sampling period
+# iv) create regression models that evaluates whether the suitability score is a better predictor of abundance
+#       and richness than simply the number of exposure days;
+# point five would be tricky - we have to account for 
+#     - random effects (site, location, year)
+#     - other fixed effects (year, elevation, habitat diversity stuff??)
+#     - things we are truly interested in (season, suitability score and their interaction)

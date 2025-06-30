@@ -7,7 +7,7 @@ library(rdwd); library(RCurl); library(dplyr); library(readxl); library(terra); 
 library(tidyr); library(dwdradar)
 #rdwd::updateRdwd()
 
-### 1. check available .nc-files on the dwd FTP server -------
+## 1. check available .nc-files on the dwd FTP server -------
 # currently available files in a given folder:
 
 # 1.1 Temperature data: 
@@ -31,26 +31,27 @@ link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_20250
 file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
 plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
-# set reference raster: rad[[1]]
-raster <- rad[[1]]
+# set temperature reference raster: rad[[1]]
+raster_ref <- rad[[1]]
 
 # 1.2 Precipitation data: ASCII Format
-
-# recent: 2005-06-01 until 2020-12-31
-# example data: 
-link <- "hourly/radolan/recent/bin/raa01-rw_10000-2501010000-dwd---bin.gz" # 25 mB
-file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
-rad <- readDWD(file)
-#plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
-
 # historical: 2005-06-01 until today
+# example data: 
+# format: ASCII
 
-# precipitation reference raster
-#raster_prec <- 
+# different structure than temperature data: choose layer of interest x within readDWD() as selection = x:x; then: call layer with rad[[1]]
+link <- "hourly/radolan/historical/asc/2010/RW-201001.tar" # 25 mB          # data for January 2010
+file <- dataDWD(link, base=gridbase,  dir=tempdir, joinbf=TRUE, read=FALSE) # dbin -> mode=wb
+rad <- readDWD(file, selection=1:400, dividebyten=TRUE)
+plotRadar(rad, main=".asc", layer=1)
+# set precipitation reference raster: rad[[1]]
+# used projection: Polar Steoreographic, Central Meridian 10.0° E , Standard Parallel 60.0° N
+
+raster_ref_prec <- rad[[1]]
 
 
 
-### 2. load spatial data of TERENO sites --------------
+## 2. load spatial data of TERENO sites --------------
 # data: site_descriptions.xlsx
 sites <- read_excel("analysis_bees_diversity/data/data_raw/site_descriptions.xlsx", sheet = "site_descriptions")
 sites <- sites[c("SITE", "TRAP", "YEAR", "coordinates", "...5")]
@@ -78,14 +79,34 @@ sites_2010 <- as.data.frame(sites_2010)
 # convert site point data into SpatVector
 sites_s <- vect(sites_2010, geom = c("lon", "lat"), crs="+proj=longlat")
 plot(sites_s)
-# use projection of reference raster (ETRS89-extended / LCC Europe --> EPSG: 3034)
+
+### 2.1 Temperature data
+# use projection of temperature reference raster (ETRS89-extended / LCC Europe --> EPSG: 3034)
 sites_proj <- project(sites_s, "EPSG:3034")
 plot(sites_proj)
 
-# extract grid cell IDs of sites 
-sites_2010$cell_id <- cellFromXY(raster, crds(sites_proj))  
+# extract grid cell IDs of sites for temperature data
+sites_2010$cell_id_temp <- cellFromXY(raster_ref, crds(sites_proj))  
 
-### 3. choose relevant raster files (hourly resolution) on temp & precipitation from .nc files  -----------------------
+### 2.2 Precipitation data
+# information given in metadata on projection of the RADOLAN precipitation raster: 
+proj <- "+proj=stere +lat_0=90.0 +lon_0=10.0 +lat_ts=60.0+a=6370040 +b=6370040 +units=m"
+
+# use projection of precipitation reference raster
+sites_proj_prec <- project(sites_s, "+proj=stere +lat_0=90.0 +lon_0=10.0 +lat_ts=60.0+a=6370040 +b=6370040 +units=m")
+
+# extract grid cell IDs of sites for precipitation data
+sites_2010$cell_id_prec <- cellFromXY(raster_ref_prec, crds(sites_proj)) 
+# problem: precipitation raster have no defined crs/projection
+
+# to do: align crs/projection of sites with the one of the precipitation raster!
+##
+##
+##
+
+
+
+## 3. choose relevant raster files (hourly resolution) on temp & precipitation from .nc files  -----------------------
 # depending on: exact sampling days, daytime
 
 # read prepared sampling data:
@@ -176,14 +197,13 @@ for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$hour <- as.POSIXct(paste0(data_samp_clim[[i]][,1], ' ',data_samp_clim[[i]]$hour), format="%Y-%m-%d %H:%M:%S")
 }
 
-## 4.1 extract climate data from raster  
-# 4.1.1 Temperature data
-
-# select proper .nc file and within there: proper raster: 
+## 4. Preparation for data extraction ------------------
+### 4.1 Temperature data -------------
+# select proper .nc file and within there: proper raster
 # 1. year + month --> select .nc file 
 # 2. day + start/end (+ daytime) --> select raster within .nc file
 
-# 1. retrieve name of .nc file of interest: e.g. tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
+# 4.1.1 retrieve name of .nc file of interest: e.g. tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
 for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$nc_temp <- NA
   
@@ -199,8 +219,7 @@ for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$nc_temp <- nc_name
 }
 
-
-# 2. get number of raster file within the .nc file
+# 4.1.2 get number of raster file within the .nc file
 ## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
 # --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
 # --> xth day, y o'clock = (x-1)*24 + y
@@ -224,15 +243,51 @@ for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$raster_nr<- raster_nr
 }
 
+### 4.2 Precipitation data -------------
+# select proper .tar file and within there: proper raster
+# 1. year + month --> select .tar file 
+# 2. day + start/end (+ daytime) --> select raster within .tar file
+# BUT: different structure than temperature data: choose layer of interest x within readDWD() as selection = x:x; then: call layer with rad[[1]]
+
+# 4.2.1 get name of .tar file of interest --> select proper folder (year) and file (month) --> defines 'link'
+for(i in 1:length(data_samp_clim)){
+  data_samp_clim[[i]]$link_prec <- NA
+  
+  # check if data.frame covers spring or summer season
+  if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
+    link_prec <- paste0(format(data_samp_clim[[i]]$dates.spring, "%Y"), "/RW-", format(data_samp_clim[[i]]$dates.spring, "%Y"),format(data_samp_clim[[i]]$dates.spring, "%m"), ".tar")
+  }else{
+    link_prec <- paste0(format(data_samp_clim[[i]]$dates.summer, "%Y"), "/RW-", format(data_samp_clim[[i]]$dates.summer, "%Y"),format(data_samp_clim[[i]]$dates.summer, "%m"), ".tar")
+  }
+  data_samp_clim[[i]]$link_prec <- link_prec
+}
+
+# 4.2.2 number of raster file within the .tar file
+## per .tar file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
+
+# --> same raster number as for temperature data (.nc files) --> already exists
+
+
+
+# 5. Extraction of data from raster files -------
 # add cell ID to meta-data
 meta$cellID<-sites_2010$cell_id[match(meta$LocTrap, sites_2010$Trap)]
 
-all.dat<-c()
+## to DO: add cell ID for precipitation data to meta-data: 
+# first: extract cellID of sites for precipitation reference raster (see )
+
+#meta$cellID_prec<-sites_2010$cell_id_prec[match(meta$LocTrap, sites_2010$Trap)]
+
+
+# prepare new master data.frame containing all day-hour-site combinations & information on the .tar-file and respective raster layer
+all.dat_prec<-c()
 for(i in 1:length(data_samp_clim)){
-  x<-data_samp_clim[[i]]; x<-cbind(x[5:7], cellID = rep(meta$cellID[i], nrow(x)), 
+  x<-data_samp_clim[[i]]; x<-cbind(x[5:8], cellID = rep(meta$cellID[i], nrow(x)), 
                                    trap = rep(meta$LocTrap[i], nrow(x))) 
-  all.dat<-rbind(all.dat, x)
+  all.dat_prec<-rbind(all.dat_prec, x)
 }
+
+# 5.1 temperature data ----- 
 
 # now let's run the extraction procedure --> if already done: proceed in line 267
 
@@ -268,68 +323,47 @@ write.csv(extracted.data,"analysis_bees_diversity/data/extracted.data.temp.csv",
 extracted.data <- read.csv("analysis_bees_diversity/data/extracted.data.temp.csv")
 
 
-  ### next steps:
-  #(ii) get the participation data
-  #(iii) back-transform the data so it is read to use 
-  #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
-  #(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
-  #     for co-lineraity, non-linearty and different scales
-  # (v) look as seasonality effects
-  
-  
-  
-  
-# 4.1.2 Precipitation data
+# 5.2 precipitation data -----
+unique.tar<-unique(all.dat$link_prec)
+extracted.data.prec<-c()
 
-##
-##
-# to be done
-
-
-# 4.2 extract climate data from raster
-
-# # information on site of data.frame i in list data_samp_clim: 
-# meta[i,2]
-# # get cell number of respective site:
-# sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]] 
-
-#for(i in 50:length(data_samp_clim)){
-for(i in 51:60){
+for(i in 1:length(unique.tar)){
   print(i)
+  link <- paste0("/hourly/radolan/historical/asc/2010/", unique.tar[i])
+  file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
   
-  data_samp_clim[[i]]$temp <- NA
-  
-  for(j in 1:length(unique(data_samp_clim[[i]]$nc_temp))){
-    link <- paste0("/hourly/hostrada/air_temperature_mean/",unique(data_samp_clim[[i]]$nc_temp)[j])
-    file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
-    rad <- readDWD(file) 
+  selection<-which(all.dat$link_prec==unique.tar[i])
+  unique.layer<-unique(all.dat$raster_nr[selection])
+  for (k in 1:length(unique.layer)){
+    print(k)
     
-    for (k in 1:nrow(data_samp_clim[[i]])){
-      if((data_samp_clim[[i]]$nc_temp[k] == unique(data_samp_clim[[i]]$nc_temp)[j]) == TRUE) {
-        
-        # chose raster file within .nc file
-        raster_nr <- data_samp_clim[[i]]$raster_nr[k]
-        raster <- rad[[raster_nr]]
-        
-        # extract temperature value in raster of interest (hour) and at site of interest (Trap; raster Cell number)
-        data_samp_clim[[i]]$temp[k] <- (terra::extract(raster, sites_id_2010$cell_id[sites_id_2010$Trap == meta[i,2]]))[[1]]
-      }
-      else{}
-    }
+    rad <- readDWD(file, selection=unique.layer[k]:unique.layer[k], dividebyten=TRUE)
+    layer <- rad[[1]]
+    
+    selection2<- which(all.dat$link_prec==unique.tar[i] & all.dat$raster_nr==unique.layer[k])
+    unique.cells<-unique(all.dat$cellID_prec[selection2])
+    extracted<- data.frame(prec = (terra::extract(layer, unique.cells)),
+                           cellID_prec = unique.cells,
+                           layer = rep(unique.layer[k], length(unique.cells)),
+                           tar.ID = rep(unique.tar[i], length(unique.cells)))
+    colnames(extracted)[1]<-c('prec')
+    extracted.data.prec<-rbind(extracted.data.prec, extracted)
   }
 }
 
-  
-data_clim <- data_samp_clim
-# remove unimportant information 
-for(i in 1:length(data_clim)){
-  data_clim[[i]] <- data_clim[[i]][c("temp")]
-}
 
-    data_samp_clim[[i]]
+### next steps:
+#(ii) get the precipitation data: open: l. 91: set projection for precipitation raster and spatial vector of site coordinates -
+#     -> extract cellID_prec --> l. 279: add cellID_prec to meta --> l. 326: extract precipation values from raster
+#(iii) back-transform the data so it is read to use 
+#(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
+#(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
+#     for co-lineraity, non-linearty and different scales
+# (v) look as seasonality effects
 
 
-# 5. compute suitability scores for wild-bee pollination for each sampling interval  -------
+
+# 6. compute suitability scores for wild-bee pollination for each sampling interval  -------
 
 # there are three constants in the formula that defines the suitability of temp for pollination
 # here, we define their range
@@ -374,7 +408,7 @@ for (i in 1:length(input.data)){
 }
 rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
 
-### 6. load in predictors and response variables and prepare them  -------
+### 7. load in predictors and response variables and prepare them  -------
 
 # load in data
 meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')

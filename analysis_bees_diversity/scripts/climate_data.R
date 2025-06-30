@@ -234,7 +234,8 @@ for(i in 1:length(data_samp_clim)){
   all.dat<-rbind(all.dat, x)
 }
 
-# now let's run the extraction procedure 
+# now let's run the extraction procedure --> if already done: proceed in line 267
+
 unique.nc<-unique(all.dat$nc_temp)
 extracted.data<-c()
 
@@ -260,9 +261,14 @@ for(i in 1:length(unique.nc)){
     extracted.data<-rbind(extracted.data, extracted)
   }
 }
-  
+# save data on extracted temp values
+write.csv(extracted.data,"analysis_bees_diversity/data/extracted.data.temp.csv", row.names = FALSE)
+
+# load data on extracted temp values
+extracted.data <- read.csv("analysis_bees_diversity/data/extracted.data.temp.csv")
+
+
   ### next steps:
-  #(i) find mistakes and get this to work and clean up the code
   #(ii) get the participation data
   #(iii) back-transform the data so it is read to use 
   #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)

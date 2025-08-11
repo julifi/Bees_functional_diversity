@@ -29,6 +29,9 @@ data_10_19 <- read_excel("analysis_bees_diversity/data/data_raw/TERENO_bees_2010
 # refine columns in 2010-2019 data 
 data_10_19 <- data_10_19[c("LocName", "LocTrap","YearValue", "StartDate", "EndDate", "DaysExposure","GenSpec", "Males", "Females", "SumIndividuals")]
 
+# correct a data entry mistake
+data_19_21$TrapLoc[which(data_19_21$TrapLoc=='FBG02*')]<-'FBG02'
+
 # trait data
 traits <- read_excel("analysis_bees_diversity/data/data_raw/all_traits.xlsx")
 #rename species name (replace '.' with ' '):

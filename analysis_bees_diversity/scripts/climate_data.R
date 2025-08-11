@@ -102,6 +102,9 @@ meta$cellID_prec<-sites_2010$cell_id_prec[match(meta$LocTrap, sites_2010$Trap)]
 # clean up
 rm(sites, sites_2010, sites_proj, sites_s, raster_ref, raster_ref_prec, rad, check)
 
+# there is a data-entry mistake within the meta data file:
+meta$LocTrap[which(meta$LocTrap=='FBG02*')]<-'FBG02'
+
 ############ 3. Change resolution of sampling seasons from daily to hourly #################
 # depending on: light availability (day time) and start/ end of sampling period (assumes a establishment and abolisment of traps at noon)
 
@@ -316,15 +319,21 @@ for(i in 1:length(unique.nc)){
 # save data on extracted temp values
 write.csv(extracted.data.temp,"analysis_bees_diversity/data/extracted.data.temp_FULL.csv", row.names = FALSE)
 
+# add extracted info to all.dat
+all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
+
+# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
+# check for NAs
+which(is.na(all.dat.temp$temp))
 
 # 5.3 precipitation data -----
-unique.tar<-unique(all.dat$link_prec)
-
 # for July 2012 (2012/RW-201207.tar) the data in the binary format within 'RADOLAN reproduced 2017_002' (radolan/reproc/2017_002/bin/2012) is incomplete
 # (3 hour missing: 1207061350 (July 6th 13:50); 1207140650 (July 14th 06:50); 1207140750 (July 14th 07:50)) 
 # the missing cdata is included in 'RADOLAN reproduced 2016_003' (radolan/reproc/2016_003/bin/2012)
 # --> in the following loop July 2012 is skipped and the loop has been split into "i in 1:10" (May 2010 to June 2012) and "i in 12:length(unique.tar)" (August 2012 to September 2021) 
 # the data for July 2012 is subsequently extracted from 'RADOLAN reproduced 2016_003'
+
+unique.tar<-unique(all.dat$link_prec)
 
 # 5.3.1 precipitation data: May 2010 - June 2012
 extracted.data.prec_1<-c()
@@ -359,9 +368,7 @@ write.csv(extracted.data.prec_1,"analysis_bees_diversity/data/extracted.data.pre
 
 # 5.3.2 precipitation data: August 2012 - September 2021
 extracted.data.prec_2<-c()
-#for(i in 12:length(unique.tar)){
-#for(i in 28:length(unique.tar)){
-for(i in 43:length(unique.tar)){
+for(i in 12:length(unique.tar)){
   print(i)
   link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
@@ -430,6 +437,19 @@ extracted.data.prec_3 <- read.csv("analysis_bees_diversity/data/extracted.data.p
 # bind data.frames
 extracted.data.prec <- rbind(extracted.data.prec_1, extracted.data.prec_2, extracted.data.prec_3)
 write.csv(extracted.data.prec,"analysis_bees_diversity/data/extracted.data.prec_FULL.csv", row.names = FALSE)
+
+
+
+
+
+
+
+# Further, there are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
+
+
+
+
+
 
 
 # 5.4 Add temperature & precipitation data to master data.frame -----

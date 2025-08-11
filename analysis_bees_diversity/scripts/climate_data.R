@@ -614,4 +614,5 @@ for(i in 1:ncol(output)){print(i)
 # point five would be tricky - we have to account for 
 #     - random effects (site, location, year)
 #     - other fixed effects (year, elevation, habitat diversity stuff??)
-#     - things we are truly interested in (season, suitability score and their interaction)
+#     - things we are truly interested in (season, suitability score and their interaction) 
+# test new

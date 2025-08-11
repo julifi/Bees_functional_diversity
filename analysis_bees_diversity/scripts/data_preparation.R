@@ -100,13 +100,24 @@ colnames(data_19_21)[1]<-'GenSpec'
 dat_all<- rbind(data_10_19[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")],
                 data_19_21[c("LocName", "LocTrap","year","month", "StartDate", "EndDate", "GenSpec", "Males", "Females")])
 
-# there is one sample that is associated to the wrong year, we need to correct that// Mark said the correcction is wrong, so let's remove it
+# 4.1 corrections of data entry mistakes
+# there is one sample that is associated to the wrong year, we need to correct that// Mark said the correction is wrong, so let's remove it
 dat_all$uniqueID<-paste0(dat_all$LocTrap,dat_all$year)
 # dat_all$year[which(dat_all$uniqueID=='HAR152020' & dat_all$EndDate== dat_all$EndDate[55953]
 #                    & dat_all$StartDate== dat_all$StartDate[55953])]<-2021
 
 dat_all<-dat_all[-which(dat_all$uniqueID=='HAR152020' & 
                           dat_all$EndDate== dat_all$EndDate[55953]& dat_all$StartDate== dat_all$StartDate[55953]),]
+
+
+# further there is a wrong sampling starting date for one spring sampling in spring 2012 - correct that:
+# location info has been added as security measure
+dat_all$StartDate[which(dat_all$year=='2012' & dat_all$StartDate == as.Date('2012-05-14', '%Y-%m-%d') & 
+                          (dat_all$LocName=='FBG'|dat_all$LocName=='SST'))]<- as.Date('2012-05-15', '%Y-%m-%d')
+dat_all$StartDate[which(dat_all$year=='2012' & dat_all$StartDate == as.Date('2012-05-15', '%Y-%m-%d') & 
+                          (dat_all$LocName=='WAN'|dat_all$LocName=='HAR'))]<- as.Date('2012-05-16', '%Y-%m-%d')
+dat_all$StartDate[which(dat_all$year=='2012' & dat_all$StartDate == as.Date('2012-05-16', '%Y-%m-%d') & 
+                          (dat_all$LocName=='GFH'|dat_all$LocName=='SIP'))]<- as.Date('2012-05-17', '%Y-%m-%d')
 
 ### 5) take all social bees - I would exclude the male social bees as those are probably not contributing to pollination.
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
@@ -286,7 +297,7 @@ rm(data_10_19, data_19_21)
 
 ### 8) create species matrices (abundance and biomass)
 
-# (i) remove honey from spec list
+# (i) remove honey bees from spec list
 spec.list<- spec.list[which(spec.list!='Apis mellifera')]
 
 # (ii) different species matrix: one for total abundance combined (f and m (without communal species)), 
@@ -302,20 +313,22 @@ colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
 dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
 
 # aggregate abundance on year-trap-season level:
-abundance_year_trap <- aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, abundance_total = dat_all$Females_Males), 
-                            by=list(dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season), function(x){sum(x, na.rm=T)})
+abundance_year_trap <- aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, 
+                                      abundance_total = dat_all$Females_Males),  by=list(
+                                        dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season), 
+                                 function(x){sum(x, na.rm=T)})
 colnames(abundance_year_trap)[1:5]<-c("LocName", "LocTrap","year", "GenSpec","season")
 abundance_year_trap$uniqueID<-paste0(abundance_year_trap$LocTrap,abundance_year_trap$year)
 
 cm.ab.spring<-cm.base
 subset<-abundance_year_trap[which(abundance_year_trap$season=='spring'),]
-for(i in 1:nrow(subset)){cm.ab.spring[which(rownames(cm.ab.spring)==subset$uniqueID[i]), which(colnames(cm.ab.spring)==subset$GenSpec[i])]<-
-                                        subset$abundance_total[i]}
+for(i in 1:nrow(subset)){cm.ab.spring[which(rownames(cm.ab.spring)==subset$uniqueID[i]), 
+                                      which(colnames(cm.ab.spring)==subset$GenSpec[i])]<- subset$abundance_total[i]}
 
 cm.ab.summer<-cm.base
 subset<-abundance_year_trap[which(abundance_year_trap$season=='summer'),]
-for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqueID[i]), which(colnames(cm.ab.summer)==subset$GenSpec[i])]<-
-                                        subset$abundance_total[i]}
+for(i in 1:nrow(subset)){cm.ab.summer[which(rownames(cm.ab.summer)==subset$uniqueID[i]), 
+                                      which(colnames(cm.ab.summer)==subset$GenSpec[i])]<- subset$abundance_total[i]}
 
 cm.ab.total<- cm.ab.summer+cm.ab.spring
 rm(subset, cm.base)

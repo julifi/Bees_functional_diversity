@@ -8,26 +8,15 @@ library(rdwd); library(RCurl); library(dplyr); library(readxl); library(terra); 
 library(tidyr); library(dwdradar); library(sf)
 #rdwd::updateRdwd()
 
-## 1. check available .nc-files on the dwd FTP server -------
-# currently available files in a given folder:
+#### 1. link sampling locations to position in rasters of temperature and precipitation data ####
 
-# 1.1 Temperature data: 
+# 1.1 Temperature data: create a reference raster
 ## .nc files containing hourly temperature data for one month: 
 ## The name of the NetCDF file is formed as follows: parameter abbreviation}_{time resolution}_{process name version}_{variant}_{grid_info}_{time coverage}.nc
 ## (variant: BE - best estimate; grid_info: gn - native grid), e.g. tas_1hr_HOSTRADA-v1-0_BE_gn_1995010100-1995013123.nc
 ## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
 
-rasterbase <- paste0(gridbase,"/hourly/hostrada")
-ftp.files <- indexFTP("/air_temperature_mean", base=rasterbase, dir=tempdir())
-
-# example data: 
-link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025030100-2025033123.nc"  #  5 MB
-file <- dataDWD(link, base=gridbase, joinbf=TRUE, read=FALSE)
-rad <- readDWD(file) # can also have interactive selection of variable
-#plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=3)
-
-
-# temperature reference raster
+# temperature reference raster - is necessary for linking cells in the raster to location of sampling points
 link <- "/hourly/hostrada/air_temperature_mean/tas_1hr_HOSTRADA-v1-0_BE_gn_2025040100-2025043023.nc"  #  5 MB
 file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file) # can also have interactive selection of variable
@@ -35,7 +24,8 @@ plotRadar(rad, main=".nc", proj="nc", extent="nc", layer=1)
 # set temperature reference raster: rad[[1]]
 raster_ref <- rad[[1]]
 
-# 1.2 Precipitation data
+# 1.2 Precipitation data: create a reference raster
+# we need a different reference raster for percipitation as the data structure is here different
 # # RADOLAN 'historical' contains missing data (missing layers within one raster stack = missing hours) --> NOT usable! instead use: RADOLAN 'reproduced' 
 
 # RADOLAN reproduced: 2005-06-01 until today
@@ -46,8 +36,6 @@ file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file, selection=1:2)
 #plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 raster_ref_prec <- rad$dat[[1]]
-
-
 
 ## 2. load spatial data of TERENO sites --------------
 # data: site_descriptions.xlsx
@@ -102,16 +90,27 @@ crs(sites_s)
 sites_2010$cell_id_prec <- cellFromXY(raster_ref_prec, crds(sites_s)) 
 # note: temperature and precipitation raster have different cell IDs for the same Traps as though they have the same projection the raster extent is different 
 
+# load metadata:
+meta <- read.csv("analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv")
 
-## 3. choose relevant raster files (hourly resolution) on temp & precipitation from .nc files  -----------------------
-# depending on: exact sampling days, daytime
+# add cell ID of temperature and precipitation raster to meta-data
+# cell ID temperature raster:
+meta$cellID_temp<-sites_2010$cell_id_temp[match(meta$LocTrap, sites_2010$Trap)]
+# cell ID precipitation raster:
+meta$cellID_prec<-sites_2010$cell_id_prec[match(meta$LocTrap, sites_2010$Trap)]
+
+# clean up
+rm(sites, sites_2010, sites_proj, sites_s, raster_ref, raster_ref_prec, rad, check)
+
+# there is a data-entry mistake within the meta data file:
+meta$LocTrap[which(meta$LocTrap=='FBG02*')]<-'FBG02'
+
+############ 3. Change resolution of sampling seasons from daily to hourly #################
+# depending on: light availability (day time) and start/ end of sampling period (assumes a establishment and abolisment of traps at noon)
 
 # read prepared sampling data:
 data_sampling <- readRDS("analysis_bees_diversity/data/sampling_days_siteyseason.RData")
 data_samp_clim <- data_sampling
-
-# load metadata:
-meta <- read.csv("analysis_bees_diversity/data/meta_sampling_days_siteyseason.csv")
 
 # add column with 'hour'; replicate each row 23times --> for 'hour' passing values from 00:00:00 to 23:00:00
 # create vector with values from 00:00 to 23:00 
@@ -145,58 +144,63 @@ for(i in 1:length(data_samp_clim)){
   # check if data.frame covers spring or summer season
   if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
     data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                       ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                              ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                                     ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), 
+                  data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
     
     # get month to exclude non-daytime hours: 
     m <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%m"))
     
   }else{
     data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                       ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                              ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                                     ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour,
+                data_samp_clim[[i]]$hour))))
     # get month to exclude non-daytime hours: 
     m <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%m"))
   }
   
-  
   # exclude non-daytime hours
   data_samp_clim[[i]]$hour <- ifelse((m == 1 & data_samp_clim[[i]]$hour < "08:00:00"), NA, 
-                                     ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
-                                            ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                   ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                                          ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                 ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                                                        ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                               ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                                                                      ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                                                                             ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                                                                                    ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                                                                                           ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                                                                                                  ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                                                                                                         ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                                                                                                                ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                                                                                                                       ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                                                                                                                              ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                                                                                                     ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                                                                                                                                            ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                   ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
-                                                                                                                                                                          ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                                 ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
-                                                                                                                                                                                        ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                                               ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
+ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
+ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
+ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
+ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
   
   # remove rows with NAs within column 'hour' (as these fall outside the sampling hours within start or end days)
   data_samp_clim[[i]] <- dplyr::filter(data_samp_clim[[i]],  !is.na(hour))
   
   data_samp_clim[[i]]$hour <- as.POSIXct(paste0(data_samp_clim[[i]][,1], ' ',data_samp_clim[[i]]$hour), format="%Y-%m-%d %H:%M:%S")
 }
+<<<<<<< HEAD
 
+=======
+rm(z, z2, m)
+>>>>>>> 6eb9cdbba974395c188526ed4b987f9e1ed91a2e
 
 ## 4. Preparation for data extraction ------------------
-### 4.1 Temperature data -------------
+### 4.1 Temperature data: add information which T file matches with sampling hours to the data_samp_clim list  -----------
 # select proper .nc file and within there: proper raster
 # 1. year + month --> select .nc file 
 # 2. day + start/end (+ daytime) --> select raster within .nc file
@@ -207,17 +211,18 @@ for(i in 1:length(data_samp_clim)){
   
   # check if data.frame covers spring or summer season
   if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
-    nc_name <- paste0("tas_1hr_HOSTRADA-v1-0_BE_gn_",format(data_samp_clim[[i]]$dates.spring, "%Y"),format(data_samp_clim[[i]]$dates.spring, "%m"),"0100-",
-                      format(data_samp_clim[[i]]$dates.spring, "%Y"),format(data_samp_clim[[i]]$dates.spring, "%m"),days_in_month(data_samp_clim[[i]]$dates.spring),"23.nc")
+    nc_name <- paste0("tas_1hr_HOSTRADA-v1-0_BE_gn_",format(data_samp_clim[[i]]$dates.spring, "%Y"),
+                      format(data_samp_clim[[i]]$dates.spring, "%m"),"0100-", format(data_samp_clim[[i]]$dates.spring, "%Y"),
+                      format(data_samp_clim[[i]]$dates.spring, "%m"),days_in_month(data_samp_clim[[i]]$dates.spring),"23.nc")
   }else{
-    nc_name <- paste0("tas_1hr_HOSTRADA-v1-0_BE_gn_",format(data_samp_clim[[i]]$dates.summer, "%Y"),format(data_samp_clim[[i]]$dates.summer, "%m"),"0100-",
-                      format(data_samp_clim[[i]]$dates.summer, "%Y"),format(data_samp_clim[[i]]$dates.summer, "%m"),days_in_month(data_samp_clim[[i]]$dates.summer),"23.nc")
+    nc_name <- paste0("tas_1hr_HOSTRADA-v1-0_BE_gn_",format(data_samp_clim[[i]]$dates.summer, "%Y"),
+                      format(data_samp_clim[[i]]$dates.summer, "%m"),"0100-", format(data_samp_clim[[i]]$dates.summer, "%Y"),
+                      format(data_samp_clim[[i]]$dates.summer, "%m"),days_in_month(data_samp_clim[[i]]$dates.summer),"23.nc")
   }
-  
   data_samp_clim[[i]]$nc_temp <- nc_name
 }
 
-# 4.1.2 get number of raster file within the .nc file
+# 4.1.2 add information which T layer matches with sampling hours to the data_samp_clim list 
 ## per .nc file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
 # --> 5th day, 2am (14 o'clock) = (5-1)*24+14 = 110
 # --> xth day, y o'clock = (x-1)*24 + y
@@ -242,7 +247,8 @@ for(i in 1:length(data_samp_clim)){
 }
 
 ### 4.2 Precipitation data -------------
-# select proper .tar.gz file and within there: proper raster
+# add information which precipitation file matches with sampling hours to the data_samp_clim list
+# layer structure of precipitation and temperature data is identical and hence, we can use the layer info of T
 # 1. year + month --> select .tar.gz file 
 # 2. day + start/end (+ daytime) --> select raster within .tar.gz file
 
@@ -258,23 +264,11 @@ for(i in 1:length(data_samp_clim)){
   }
   data_samp_clim[[i]]$link_prec <- link_prec
 }
-
-# 4.2.2 number of raster file within the .tar file
-## per .tar file: nr of layers = 24*nr of days (30days: 720; 31 days: 744; 38 days: 672; 29 days: 696)
-
-# --> same raster number as for temperature data (.nc files) --> already exists
-
+rm(x,y,raster_nr, nc_name, link_prec, daytime_hours)
 
 
 # 5. Extraction of data from raster files -------
 # 5.1. Create/ load master data.frame -----
-
-# add cell ID of temperature and precipitation raster to meta-data
-# cell ID temperature raster:
-meta$cellID_temp<-sites_2010$cell_id_temp[match(meta$LocTrap, sites_2010$Trap)]
-# cell ID precipitation raster:
-meta$cellID_prec<-sites_2010$cell_id_prec[match(meta$LocTrap, sites_2010$Trap)]
-
 
 # prepare master data.frame containing all day-hour-site combinations & information on the .nc-file (temperature raster stack) , .tar-file (precipitation raster stack) and respective raster layer
 # if already done --> load data in line 294
@@ -287,12 +281,21 @@ for(i in 1:length(data_samp_clim)){
   all.dat<-rbind(all.dat, x)
 }
 
+# check for double entries in the all data - there should be none
+check<-table(paste0(all.dat$hour, all.dat$trap))
+check<-as.data.frame(check)
+dublicates<-which(check$Freq>1)
+rm(check, dublicates, x)
+
 # save master data.frame "all.dat"
 write.csv(all.dat,"analysis_bees_diversity/data/data_weather/all.dat.csv", row.names = FALSE)
 
 # load master data.frame "all.dat"
 all.dat <- read.csv("analysis_bees_diversity/data/data_weather/all.dat.csv")
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6eb9cdbba974395c188526ed4b987f9e1ed91a2e
 
 # 5.2 temperature data ----- 
 # now let's run the extraction procedure --> if already done: proceed in line 320
@@ -324,15 +327,21 @@ for(i in 1:length(unique.nc)){
 # save data on extracted temp values
 write.csv(extracted.data.temp,"analysis_bees_diversity/data/data_weather/extracted.data.temp_FULL.csv", row.names = FALSE)
 
+# add extracted info to all.dat
+all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
+
+# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
+# check for NAs
+which(is.na(all.dat.temp$temp))
 
 # 5.3 precipitation data -----
-unique.tar<-unique(all.dat$link_prec)
-
 # for July 2012 (2012/RW-201207.tar) the data in the binary format within 'RADOLAN reproduced 2017_002' (radolan/reproc/2017_002/bin/2012) is incomplete
 # (3 hour missing: 1207061350 (July 6th 13:50); 1207140650 (July 14th 06:50); 1207140750 (July 14th 07:50)) 
 # the missing cdata is included in 'RADOLAN reproduced 2016_003' (radolan/reproc/2016_003/bin/2012)
 # --> in the following loop July 2012 is skipped and the loop has been split into "i in 1:10" (May 2010 to June 2012) and "i in 12:length(unique.tar)" (August 2012 to September 2021) 
 # the data for July 2012 is subsequently extracted from 'RADOLAN reproduced 2016_003'
+
+unique.tar<-unique(all.dat$link_prec)
 
 # 5.3.1 precipitation data: May 2010 - June 2012
 extracted.data.prec_1<-c()
@@ -367,9 +376,7 @@ write.csv(extracted.data.prec_1,"analysis_bees_diversity/data/data_weather/extra
 
 # 5.3.2 precipitation data: August 2012 - September 2021
 extracted.data.prec_2<-c()
-#for(i in 12:length(unique.tar)){
-#for(i in 28:length(unique.tar)){
-for(i in 43:length(unique.tar)){
+for(i in 12:length(unique.tar)){
   print(i)
   link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
@@ -438,6 +445,19 @@ extracted.data.prec_3 <- read.csv("analysis_bees_diversity/data/data_weather/ext
 # bind data.frames
 extracted.data.prec <- rbind(extracted.data.prec_1, extracted.data.prec_2, extracted.data.prec_3)
 write.csv(extracted.data.prec,"analysis_bees_diversity/data/data_weather/extracted.data.prec_FULL.csv", row.names = FALSE)
+
+
+
+
+
+
+
+# Further, there are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
+
+
+
+
+
 
 
 # 5.4 Add temperature & precipitation data to master data.frame -----

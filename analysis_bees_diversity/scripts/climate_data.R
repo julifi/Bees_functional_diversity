@@ -34,7 +34,7 @@ raster_ref <- rad[[1]]
 link <- "hourly/radolan/reproc/2017_002/bin/2017/RW2017.002_201712.tar.gz"  # 25 MB
 file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
 rad <- readDWD(file, selection=1:2)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
+#plotRadar(rad$dat, main=".binary RW", extent="rw", layer=1)
 raster_ref_prec <- rad$dat[[1]]
 
 ## 2. load spatial data of TERENO sites --------------
@@ -104,6 +104,7 @@ rm(sites, sites_2010, sites_proj, sites_s, raster_ref, raster_ref_prec, rad, che
 
 # there is a data-entry mistake within the meta data file:
 meta$LocTrap[which(meta$LocTrap=='FBG02*')]<-'FBG02'
+
 
 ############ 3. Change resolution of sampling seasons from daily to hourly #################
 # depending on: light availability (day time) and start/ end of sampling period (assumes a establishment and abolisment of traps at noon)
@@ -193,7 +194,6 @@ ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]
   
   data_samp_clim[[i]]$hour <- as.POSIXct(paste0(data_samp_clim[[i]][,1], ' ',data_samp_clim[[i]]$hour), format="%Y-%m-%d %H:%M:%S")
 }
-rm(z, z2, m)
 
 ## 4. Preparation for data extraction ------------------
 ### 4.1 Temperature data: add information which T file matches with sampling hours to the data_samp_clim list  -----------
@@ -281,10 +281,10 @@ for(i in 1:length(data_samp_clim)){
 check<-table(paste0(all.dat$hour, all.dat$trap))
 check<-as.data.frame(check)
 dublicates<-which(check$Freq>1)
-rm(check, dublicates, x)
+rm(check, dublicates)
 
 # save master data.frame "all.dat"
-write.csv(all.dat,"analysis_bees_diversity/data/all.dat.csv", row.names = FALSE)
+write.csv(all.dat,"analysis_bees_diversity/data/data_weather/all.dat.csv", row.names = FALSE)
 
 # load master data.frame "all.dat"
 all.dat <- read.csv("analysis_bees_diversity/data/data_weather/all.dat.csv")
@@ -294,7 +294,7 @@ all.dat <- read.csv("analysis_bees_diversity/data/data_weather/all.dat.csv")
 unique.nc<-unique(all.dat$nc_temp)
 extracted.data.temp<-c()
 
-for(i in 1:length(unique.nc)){
+for(i in 22:length(unique.nc)){
   print(i)
   link <- paste0("/hourly/hostrada/air_temperature_mean/", unique.nc[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
@@ -317,13 +317,15 @@ for(i in 1:length(unique.nc)){
   }
 }
 # save data on extracted temp values
-write.csv(extracted.data.temp,"analysis_bees_diversity/data/extracted.data.temp_FULL.csv", row.names = FALSE)
+write.csv(extracted.data.temp,"analysis_bees_diversity/data/data_weather/extracted.data.temp_FULL.csv", row.names = FALSE)
 
 # add extracted info to all.dat
 all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
 
 # note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
 # check for NAs
+# check for NAs
+all.dat.temp$hour[which(is.na(all.dat.temp$temp))]
 which(is.na(all.dat.temp$temp))
 
 # 5.3 precipitation data -----
@@ -363,12 +365,12 @@ for(i in 1:10){
 }
 
 # save data on extracted prec values
-write.csv(extracted.data.prec_1,"analysis_bees_diversity/data/extracted.data.prec_2010_05_to_2012_06.csv", row.names = FALSE)
+write.csv(extracted.data.prec_1,"analysis_bees_diversity/data/data_weather/extracted.data.prec_2010_05_to_2012_06.csv", row.names = FALSE)
 
 
 # 5.3.2 precipitation data: August 2012 - September 2021
 extracted.data.prec_2<-c()
-for(i in 12:length(unique.tar)){
+for(i in 40:length(unique.tar)){
   print(i)
   link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
@@ -394,7 +396,7 @@ for(i in 12:length(unique.tar)){
 }
 
 # save data on extracted prec values
-write.csv(extracted.data.prec_2,"analysis_bees_diversity/data/extracted.data.prec_2012_08_to_2021_09.csv", row.names = FALSE)
+write.csv(extracted.data.prec_2,"analysis_bees_diversity/data/data_weather/extracted.data.prec_2012_08_to_2021_09.csv", row.names = FALSE)
 
 # 5.3.3 precipitation data: July 2012
 link <- "hourly/radolan/reproc/2016_003/bin/2012/RW2016.003_201207.tar.gz"  # 25 MB
@@ -421,57 +423,47 @@ for (k in 1:length(unique.layer)){
   extracted.data.prec_3<-rbind(extracted.data.prec_3, extracted)
 }
 
-write.csv(extracted.data.prec_3,"analysis_bees_diversity/data/extracted.data.prec_2021_07.csv", row.names = FALSE)
+write.csv(extracted.data.prec_3,"analysis_bees_diversity/data/data_weather/extracted.data.prec_2021_07.csv", row.names = FALSE)
 
 
 # load precipitation data: 
 # May 2010 - June 2012
-extracted.data.prec_1 <- read.csv("analysis_bees_diversity/data/extracted.data.prec_2010_05_to_2012_06.csv")
+extracted.data.prec_1 <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.prec_2010_05_to_2012_06.csv")
 
 # August 2012 - September 2021
-extracted.data.prec_2 <- read.csv("analysis_bees_diversity/data/extracted.data.prec_2012_08_to_2021_09.csv")
+extracted.data.prec_2 <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.prec_2012_08_to_2021_09.csv")
 
 # July 2012
-extracted.data.prec_3 <- read.csv("analysis_bees_diversity/data/extracted.data.prec_2021_07.csv")
+extracted.data.prec_3 <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.prec_2021_07.csv")
 
 # bind data.frames
 extracted.data.prec <- rbind(extracted.data.prec_1, extracted.data.prec_2, extracted.data.prec_3)
-write.csv(extracted.data.prec,"analysis_bees_diversity/data/extracted.data.prec_FULL.csv", row.names = FALSE)
-
-
-
-
-
-
-
-# Further, there are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
-
-
-
-
+write.csv(extracted.data.prec,"analysis_bees_diversity/data/data_weather/extracted.data.prec_FULL.csv", row.names = FALSE)
 
 
 
 # 5.4 Add temperature & precipitation data to master data.frame -----
 # load temperature data: 
-extracted.data.temp <- read.csv("analysis_bees_diversity/data/extracted.data.temp_FULL.csv")
+# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
+extracted.data.temp <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.temp_FULL.csv")
+
 # load precipitation data: 
-extracted.data.prec <- read.csv("analysis_bees_diversity/data/extracted.data.prec_FULL.csv")
+# note: the extracted.data.prec has a different number of rows because some traps are in the same raster cell.
+extracted.data.prec <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.prec_FULL.csv")
 
 # check for duplicates:
 extracted.data.temp[duplicated(extracted.data.temp), ] # --> 0 duplicates
 extracted.data.prec[duplicated(extracted.data.prec), ] # --> 0 duplicates
 
-
 # merge all.dat with data on temperature and precipitation
-all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
 all.dat.prec <- left_join(all.dat, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
-
 all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 
+# check for NAs
+temp.NA <- which(is.na(all.dat.temp.prec$temp))
+prec.NA <- which(is.na(all.dat.temp.prec$prec))
 
-temp.NA <- which(is.na(all.dat.temp$temp))
-prec.NA <- which(is.na(all.dat.prec$prec))
+# --> here are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
 
 # test NA values in extracted.data.prec:
 ## e.g.:
@@ -483,10 +475,10 @@ rad <- readDWD(file)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=269)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=270)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=271)
+rad$dat[[269]]
+rad$dat[[270]]
+rad$dat[[271]]
 # --> no data available for respective layer (270)
-
-
-
 
 
 ### next steps:

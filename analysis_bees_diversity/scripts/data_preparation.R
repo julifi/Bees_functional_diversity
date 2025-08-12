@@ -1,4 +1,5 @@
 ## Global Setting ####################################################
+# to un-comit the last changes put in the terminal: git reset HEAD~
 
 # BEFORE: run setting.R
 setwd(wrkpath)

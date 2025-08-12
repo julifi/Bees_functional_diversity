@@ -319,15 +319,6 @@ for(i in 22:length(unique.nc)){
 # save data on extracted temp values
 write.csv(extracted.data.temp,"analysis_bees_diversity/data/data_weather/extracted.data.temp_FULL.csv", row.names = FALSE)
 
-# add extracted info to all.dat
-all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
-
-# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
-# check for NAs
-# check for NAs
-all.dat.temp$hour[which(is.na(all.dat.temp$temp))]
-which(is.na(all.dat.temp$temp))
-
 # 5.3 precipitation data -----
 # for July 2012 (2012/RW-201207.tar) the data in the binary format within 'RADOLAN reproduced 2017_002' (radolan/reproc/2017_002/bin/2012) is incomplete
 # (3 hour missing: 1207061350 (July 6th 13:50); 1207140650 (July 14th 06:50); 1207140750 (July 14th 07:50)) 
@@ -456,14 +447,99 @@ extracted.data.temp[duplicated(extracted.data.temp), ] # --> 0 duplicates
 extracted.data.prec[duplicated(extracted.data.prec), ] # --> 0 duplicates
 
 # merge all.dat with data on temperature and precipitation
+all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
 all.dat.prec <- left_join(all.dat, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 
+# 5.5 Quality control of the data -----
+
 # check for NAs
-temp.NA <- which(is.na(all.dat.temp.prec$temp))
-prec.NA <- which(is.na(all.dat.temp.prec$prec))
+temp.NA <- which(is.na(all.dat.temp.prec$temp)) # nice - the T data is complete
+prec.NA <- which(is.na(all.dat.temp.prec$prec)) # here we have a couple of NAs; these are not because of data entry mistakes
+# but reflect true missing data
+
+# add landscape ID to all.dat.prec 
+all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
+
+# create an object that contains all missing data 
+missing<-all.dat.temp.prec[which(is.na(all.dat.prec$prec)), ]
+missing$unique.ID<-paste0(missing$hour, missing$landscape)
+
+# count for each hour-landscape combination the number of missing data points
+no.unique.ID<-as.data.frame(table(missing$unique.ID))
+colnames(no.unique.ID)<-c('no.unique.ID','freq_NAs')
+
+# create an object that contains all data for which at least one trap per landscape is missing 
+no.unique.ID.all.dat<-paste0(all.dat.temp.prec$hour, all.dat.temp.prec$landscape)
+x<-all.dat.temp.prec[which(is.element(no.unique.ID.all.dat, no.unique.ID$no.unique.ID)),]
+x$unique.ID<-paste0(x$hour, x$landscape)
+
+# compute how many data points are available in total per hour-landscape combination
+y<-as.data.frame(table(x$unique.ID))
+colnames(y)<-c('no.unique.ID','freq_data_landscape')
+
+# add this info to the missing data information
+no.unique.ID$freq_data_landscape<-y$freq_data_landscape
+
+# get the hour and landscape info in the data frame
+no.unique.ID<-cbind(no.unique.ID, missing[match(no.unique.ID$no.unique.ID, missing$unique.ID),c(1,4,6,10)])
+
+# count how many missing data there are for each hour
+x<-aggregate(no.unique.ID$freq_NAs, by=list(no.unique.ID$hour), function(x){sum(x)})
+
+no.unique.ID$freq_missing_whole_data<-x$x[match(no.unique.ID$hour,x$Group.1)]
+
+# count how many data points there are for each hour that contains at least one missing data entry
+x<-all.dat.temp.prec[which(is.element(all.dat.temp.prec$hour, no.unique.ID$hour)),]
+y<-as.data.frame(table(x$hour))
+colnames(y)<-c('unique_hr','freq_all_data')
+
+no.unique.ID$freq_all_data<-y$freq_all_data[match(no.unique.ID$hour,y$unique_hr)]
+# so now we have a data frame that tells us how many local, how many regional and how many super-regional
+# problems we have.
+
+# To do:
+# 1) Super-regional problems (an hour misses across all sites): assume 0 rainfall - these are only 1700 data points (0.01% of all data)
+# 2) Other problems: load data again and use the value from the closest cell that contains data as replacement
+# steps:
+# A) define bounding box
+# B) determine, which raster cells are in the bounding box and create a data frame with their ID
+# C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
+#    (number of rows is equal the number of raster cells in the bounding box)
+# D) create a loop for each unique months (data file) that needs to be loaded. 
+# within the loop get a second for the unique hours within the data frame where we have missing data
+# E) Then create a third loop for each of the traps that has missing data for that hour.
+# F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
+# G) add this value to the 'missing' data-frame at the right position
+
+
+
+
+
+# inter-landscape extrapolation impossible
+sum(no.unique.ID$freq_NAs[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data)])
+
+x<-no.unique.ID[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data),]
+
+# intra-landscape extrapolation possible
+sum(no.unique.ID$freq_NAs)-sum(no.unique.ID$freq_NAs[which(no.unique.ID$freq_NAs == no.unique.ID$freq_data_landscape)])
+
+# 
+x<-no.unique.ID[which(no.unique.ID$freq_NAs == no.unique.ID$freq_data_landscape & 
+                        no.unique.ID$freq_all_data != no.unique.ID$freq_missing_whole_data),]
+
+sum(x$freq_NAs)
+length(unique(x$link_prec))
+length(unique(x$hour))
+length(unique(all.dat.temp.prec$hour))
+
+
+rm(x,y,missing,check, count)
 
 # --> here are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
+
+
+
 
 # test NA values in extracted.data.prec:
 ## e.g.:

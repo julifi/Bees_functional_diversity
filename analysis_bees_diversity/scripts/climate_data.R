@@ -442,39 +442,28 @@ write.csv(extracted.data.prec,"analysis_bees_diversity/data/data_weather/extract
 
 
 
-
-# Further, there are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
-
-
-
 # 5.4 Add temperature & precipitation data to master data.frame -----
 # load temperature data: 
+# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
 extracted.data.temp <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.temp_FULL.csv")
+
 # load precipitation data: 
+# note: the extracted.data.prec has a different number of rows because some traps are in the same raster cell.
 extracted.data.prec <- read.csv("analysis_bees_diversity/data/data_weather/extracted.data.prec_FULL.csv")
 
 # check for duplicates:
 extracted.data.temp[duplicated(extracted.data.temp), ] # --> 0 duplicates
 extracted.data.prec[duplicated(extracted.data.prec), ] # --> 0 duplicates
-dupl_all.dat <- all.dat[duplicated(all.dat), ]   # --> 1504 duplicates
 
 # merge all.dat with data on temperature and precipitation
 all.dat.prec <- left_join(all.dat, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
-
-# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
-# check for NAs
-# check for NAs
-all.dat.prec$hour[which(is.na(all.dat.prec$prec))]
-which(is.na(all.dat.prec$prec))
-
-
-
-
-
 all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 
+# check for NAs
 temp.NA <- which(is.na(all.dat.temp.prec$temp))
 prec.NA <- which(is.na(all.dat.temp.prec$prec))
+
+# --> here are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
 
 # test NA values in extracted.data.prec:
 ## e.g.:

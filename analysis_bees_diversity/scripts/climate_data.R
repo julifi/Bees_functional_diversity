@@ -105,6 +105,7 @@ rm(sites, sites_2010, sites_proj, sites_s, raster_ref, raster_ref_prec, rad, che
 # there is a data-entry mistake within the meta data file:
 meta$LocTrap[which(meta$LocTrap=='FBG02*')]<-'FBG02'
 
+
 ############ 3. Change resolution of sampling seasons from daily to hourly #################
 # depending on: light availability (day time) and start/ end of sampling period (assumes a establishment and abolisment of traps at noon)
 
@@ -193,11 +194,6 @@ ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]
   
   data_samp_clim[[i]]$hour <- as.POSIXct(paste0(data_samp_clim[[i]][,1], ' ',data_samp_clim[[i]]$hour), format="%Y-%m-%d %H:%M:%S")
 }
-<<<<<<< HEAD
-
-=======
-rm(z, z2, m)
->>>>>>> 6eb9cdbba974395c188526ed4b987f9e1ed91a2e
 
 ## 4. Preparation for data extraction ------------------
 ### 4.1 Temperature data: add information which T file matches with sampling hours to the data_samp_clim list  -----------
@@ -285,24 +281,20 @@ for(i in 1:length(data_samp_clim)){
 check<-table(paste0(all.dat$hour, all.dat$trap))
 check<-as.data.frame(check)
 dublicates<-which(check$Freq>1)
-rm(check, dublicates, x)
+rm(check, dublicates)
 
 # save master data.frame "all.dat"
 write.csv(all.dat,"analysis_bees_diversity/data/data_weather/all.dat.csv", row.names = FALSE)
 
 # load master data.frame "all.dat"
 all.dat <- read.csv("analysis_bees_diversity/data/data_weather/all.dat.csv")
-<<<<<<< HEAD
-
-=======
->>>>>>> 6eb9cdbba974395c188526ed4b987f9e1ed91a2e
 
 # 5.2 temperature data ----- 
 # now let's run the extraction procedure --> if already done: proceed in line 320
 unique.nc<-unique(all.dat$nc_temp)
 extracted.data.temp<-c()
 
-for(i in 1:length(unique.nc)){
+for(i in 22:length(unique.nc)){
   print(i)
   link <- paste0("/hourly/hostrada/air_temperature_mean/", unique.nc[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
@@ -332,6 +324,8 @@ all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_
 
 # note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
 # check for NAs
+# check for NAs
+all.dat.temp$hour[which(is.na(all.dat.temp$temp))]
 which(is.na(all.dat.temp$temp))
 
 # 5.3 precipitation data -----
@@ -376,7 +370,7 @@ write.csv(extracted.data.prec_1,"analysis_bees_diversity/data/data_weather/extra
 
 # 5.3.2 precipitation data: August 2012 - September 2021
 extracted.data.prec_2<-c()
-for(i in 12:length(unique.tar)){
+for(i in 40:length(unique.tar)){
   print(i)
   link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
@@ -449,14 +443,7 @@ write.csv(extracted.data.prec,"analysis_bees_diversity/data/data_weather/extract
 
 
 
-
-
-
 # Further, there are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
-
-
-
-
 
 
 
@@ -472,8 +459,17 @@ extracted.data.prec[duplicated(extracted.data.prec), ] # --> 0 duplicates
 dupl_all.dat <- all.dat[duplicated(all.dat), ]   # --> 1504 duplicates
 
 # merge all.dat with data on temperature and precipitation
-all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_temp", "cellID_temp"), copy=FALSE)
 all.dat.prec <- left_join(all.dat, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
+
+# note: the extracted.data.temp has a different number of rows because some traps are in the same raster cell.
+# check for NAs
+# check for NAs
+all.dat.prec$hour[which(is.na(all.dat.prec$prec))]
+which(is.na(all.dat.prec$prec))
+
+
+
+
 
 all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 
@@ -490,6 +486,9 @@ rad <- readDWD(file)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=269)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=270)
 plotRadar(rad$dat, main=".binary RW", extent="rw", layer=271)
+rad$dat[[269]]
+rad$dat[[270]]
+rad$dat[[271]]
 # --> no data available for respective layer (270)
 
 

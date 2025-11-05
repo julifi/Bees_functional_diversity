@@ -20,7 +20,7 @@ rainbow10<-c(rgb(82,25,19,maxColorValue=255),"#CE2220","#E67F33", "#D0B541",  "#
 
 ########## A) Data preparation #########
 
-### 1) read in data
+### A1) read in data #####
 # raw data: 2019-2021
 data_19_21 <- read_excel('analysis_bees_diversity/data/data_raw/Bee_Data2019-2021_2024-08-16.xlsx', sheet = "BeeData_2019-21")
 
@@ -43,7 +43,7 @@ traits$species <- gsub(".", " ", traits$species, fixed = TRUE)
 # # rename colnames in traits_raw data
 # colnames(traits_raw)[c(1,5,6,9,10)]<- c("species", "ITD_mean_f_[mm]", "foraging range_ff_[km]", "habitat_specialisation", "sociality")
 
-### 2) Synchronize colnames and Location names
+### A2) Synchronize colnames and Location names ####
 # rename Location:
 data_10_19$LocName <- str_extract(data_10_19$LocName, "\\(.*\\)")
 data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
@@ -51,7 +51,7 @@ data_10_19$LocName <- str_remove_all(data_10_19$LocName, "[\\(\\)]")
 # rename colnames in 19-21 data
 colnames(data_19_21)[c(2:4,6:8)]<- c("Males", "Females","LocName","StartDate", "EndDate","LocTrap")
 
-### 3) Synchronize species names in the two data sets
+### A3) Synchronize species names in the two data sets ####
 for(i in 1:nrow(data_19_21)){pos<-which(strsplit(data_19_21$fullGenSpec[i], "")[[1]]==" ")
 data_19_21$fullGenSpec[i]<-substr(data_19_21$fullGenSpec[i],0,pos[2]-1)}
 
@@ -83,7 +83,7 @@ x$x[which(is.na(match(x$x, y$y)))]
 spec.list<- z$z
 rm(pos,x,y,z)
 
-### 4) merge the two data files with bee data
+### A4) merge the two data files with bee data ####
 # note: for now, the 2019 data from the old file is deleted. But we should still check once whether the two 
 # data sets are identical
 
@@ -123,7 +123,7 @@ dat_all$StartDate[which(dat_all$year=='2012' & dat_all$StartDate == as.Date('201
 dat_all$StartDate[which(dat_all$year=='2012' & dat_all$StartDate == as.Date('2012-05-16', '%Y-%m-%d') & 
                           (dat_all$LocName=='GFH'|dat_all$LocName=='SIP'))]<- as.Date('2012-05-17', '%Y-%m-%d')
 
-### 5) take all social bees - I would exclude the male social bees as those are probably not contributing to pollination.
+### A5) take all social bees - I would exclude the male social bees as those are probably not contributing to pollination. #####
 communal<-c(traits$species[which(traits$sociality=='communal')],'Apis mellifera')
 
 # merging parameter showing whether males should be used or not
@@ -132,7 +132,7 @@ dat_all$consider_males[which(is.na(match(dat_all$GenSpec,communal))==F)]<-0
 
 rm(communal)
 
-### 6) create meta-data containing all location-year combinations
+### A6) create meta-data containing all location-year combinations ####
 # create and trim the meta-data
 meta<- aggregate(list(dat_all$Males), by=list(dat_all$LocName, dat_all$LocTrap,dat_all$year), function(x){mean(x, na.rm=T)})
 meta<-meta[,1:3]; colnames(meta)<-c("LocName", "LocTrap","year")
@@ -140,7 +140,7 @@ meta<-meta[,1:3]; colnames(meta)<-c("LocName", "LocTrap","year")
 # create a unique ID that can be used for the species data
 meta$uniqueID<-paste0(meta$LocTrap,meta$year)
 
-### 7) add sampling time and season to meta-data
+### A7) add sampling time and season to meta-data ####
 # (i) first add season to dat_all
 dat_all$start.day<-yday(dat_all$StartDate)
 hist(dat_all$start.day) # day 180 is a good separation between seasons
@@ -227,7 +227,7 @@ meta.summer<- aggregate(list(dat_all$Males[x]),
 colnames(meta.summer)<-c('LocName', 'LocTrap', 'year', 'StartDate', 'EndDate')
 meta.summer<-meta.summer[,-6]
 
-# (vi) we can now add a starting date and an end date of the spring season to the meta data -->??? @ALFRED: you mean of the summer season???
+# (vi) we can now add a starting date and an end date of the summer season to the meta data
 # start date
 y<- aggregate(list(dat_all$StartDate[x]), by=list(dat_all$LocName[x], dat_all$LocTrap[x], dat_all$year[x]),
               function(x){min(x, na.rm=T)})
@@ -296,17 +296,99 @@ hist(meta$total.exposure, breaks = 40)
 length(which(meta$total.exposure<64))
 length(which(meta$total.exposure<69))
 
-rm(meta.spring, meta.summer, y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
+rm(y, y.2, y.3, end.gap, ends, gaps, no.of.gaps, start.gap, starts)
 rm(data_10_19, data_19_21)
 
-### 8) create species matrices (abundance and biomass)
+# (xi) make some small changes in the variable names and create meta-data for each sample
 
-# (i) remove honey bees from spec list
+# rename column names in the meta data
+colnames(meta)[c(1,2)]<-c('landscape','site')
+colnames(meta.spring)[c(1,2)]<-c('landscape','site'); colnames(meta.summer)[c(1,2)]<-c('landscape','site')
+
+# combine the two season meta data
+meta.spring$season<-'spring'; meta.summer$season<-'summer'
+meta.sample<-rbind(meta.spring, meta.summer)
+
+# create unique sample ID
+meta.sample$sample_ID<-paste0(meta.sample$uniqueID,'_', meta.sample$StartDate)
+
+# add honey bee abundance to sample meta-data
+honey.bees<-dat_all[which(dat_all$GenSpec=='Apis mellifera'),]
+honey.bees$sample_ID<-paste0(honey.bees$uniqueID,'_', honey.bees$StartDate)
+
+meta.sample$honey.bee.abund<-0
+meta.sample$honey.bee.abund[match(honey.bees$sample_ID, meta.sample$sample_ID)]<-
+  honey.bees$Females+honey.bees$Males
+
+# add honey bee abundance to sample site-year meta data
+x<-aggregate(meta.sample$honey.bee.abund, by=list(meta.sample$uniqueID), function(x){sum(x)})
+meta$honey.bee.abund[match(x$Group.1, meta$uniqueID)]<-x$x
+
+# add info about mean sampling date
+meta.sample$mean.sampling.date<- 
+  yday(meta.sample$StartDate) + (yday(meta.sample$EndDate)-yday(meta.sample$StartDate))/2
+
+rm(x, honey.bees, meta.spring, meta.summer)
+# write meta data
+write.csv(meta.sample,'analysis_bees_diversity/data/meta.sample.csv')
+write.csv(meta,'analysis_bees_diversity/data/meta.site_year.csv')
+
+### B) create species matrices (abundance and biomass) #####
+### B.1) General preparations ####
+# (i) create new column on abundance of both females and males
+# use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
+dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
+
+# (ii) remove honey bees from spec list
 spec.list<- spec.list[which(spec.list!='Apis mellifera')]
+dat_all<-dat_all[-which(dat_all$GenSpec=='Apis mellifera'),]
 
-# (ii) different species matrix: one for total abundance combined (f and m (without communal species)), 
-#                                one for total biomass combined (f and m (without communal species))
-#                                one for total presence/absence combined (f and m)
+# (iii) add biomass to dat_all
+traits$`mean_body_length_f_[mm]`
+
+# missing species in trait data
+missing.species.traits <- unique(dat_all$GenSpec) [unique(dat_all$GenSpec) %in% unique(traits$species)==F]
+
+# To do
+# A) clarify missing species traits - are there any errors in species identity/ are there some other issues/
+#    add missing trait data
+# B) clarify how to handle missing size data for male bees. 
+# C) create biomass data matrix
+
+# (iv) add species richness to sample meta-data 
+rich<-aggregate(dat_all$Females_Males,  by=list( dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$StartDate), 
+                            function(x){length(which(x>0))}) 
+colnames(rich)<-c('landscape','site','year', 'StartDate', 'richness')
+rich$sample_ID<-paste0(rich$site,rich$year,'_',rich$StartDate)
+
+meta.sample$richness<-0
+meta.sample$richness[match(rich$sample_ID,meta.sample$sample_ID)]<- rich$richness
+
+# (iv) add total abundance to sample meta-data 
+abund<-aggregate(dat_all$Females_Males,  by=list( dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$StartDate), 
+                function(x){sum(x)}) 
+colnames(abund)<-c('landscape','site','year', 'StartDate', 'abund')
+abund$sample_ID<-paste0(abund$site,abund$year,'_',abund$StartDate)
+
+meta.sample$total.abundance<-0
+meta.sample$total.abundance[match(abund$sample_ID,meta.sample$sample_ID)]<- abund$abund
+
+rm(rich, abund)
+
+# some diagnostics
+hist(meta.sample$total.abundance[which(meta.sample$total.abundance<200)], breaks  = 35)
+plot(meta.sample$total.abundance[which(meta.sample$total.abundance<500)], 
+     meta.sample$richness[which(meta.sample$total.abundance<500)])
+
+meta.sample$total.abundance[which(meta.sample$total.abundance>500)]
+#hmm that is really quite high... is this realistic?
+
+
+### B.2) different species matrix ####
+
+# one for total abundance combined (f and m (without communal species)), 
+# one for total biomass combined (f and m (without communal species))
+# one for total presence/absence combined (f and m)
 # base species matrix
 cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list), rep(0,nrow(meta)* length(spec.list)))
 colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
@@ -314,12 +396,16 @@ colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
 # (iii) create matrix total abundance combined (f and m (without m of communal species))
 # create new column on abundance of both females and males
 # use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
-dat_all$Females_Males <- dat_all$Females + dat_all$consider_males*dat_all$Males
+
+### 2.B) Create season-specific values ####
+
+
+
 
 # aggregate abundance on year-trap-season level:
-abundance_year_trap <- aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, 
-                                      abundance_total = dat_all$Females_Males),  by=list(
-                                        dat_all$LocName, dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season), 
+abundance_year_trap<-aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, 
+                                    abundance_total = dat_all$Females_Males),  by=list(
+                                      dat_all$LocName,dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season),
                                  function(x){sum(x, na.rm=T)})
 colnames(abundance_year_trap)[1:5]<-c("LocName", "LocTrap","year", "GenSpec","season")
 abundance_year_trap$uniqueID<-paste0(abundance_year_trap$LocTrap,abundance_year_trap$year)

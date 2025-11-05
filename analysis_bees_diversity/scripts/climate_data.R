@@ -451,12 +451,29 @@ all.dat.temp <- left_join(all.dat, extracted.data.temp, by = c("raster_nr", "nc_
 all.dat.prec <- left_join(all.dat, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster_nr", "link_prec", "cellID_prec"), copy=FALSE)
 
-# 5.5 Quality control of the data -----
 
+
+
+# 5.5 Quality control of the data -----
 # check for NAs
 temp.NA <- which(is.na(all.dat.temp.prec$temp)) # nice - the T data is complete
 prec.NA <- which(is.na(all.dat.temp.prec$prec)) # here we have a couple of NAs; these are not because of data entry mistakes
-# but reflect true missing data
+# but reflect true missing data: 
+# # test NA values in extracted.data.prec:
+# ## e.g.:
+# #layer: 270
+# #link: 2010/RW2017.002_201005.tar.gz
+# link <- "hourly/radolan/reproc/2017_002/bin/2010/RW2017.002_201005.tar.gz"  # 25 MB
+# file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
+# rad <- readDWD(file)
+# plotRadar(rad$dat, main=".binary RW", extent="rw", layer=269)
+# plotRadar(rad$dat, main=".binary RW", extent="rw", layer=270)
+# plotRadar(rad$dat, main=".binary RW", extent="rw", layer=271)
+# rad$dat[[269]]
+# rad$dat[[270]]
+# rad$dat[[271]]
+# # --> no data available for respective layer (270)
+
 
 # add landscape ID to all.dat.prec 
 all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
@@ -498,24 +515,6 @@ no.unique.ID$freq_all_data<-y$freq_all_data[match(no.unique.ID$hour,y$unique_hr)
 # so now we have a data frame that tells us how many local, how many regional and how many super-regional
 # problems we have.
 
-# To do:
-# 1) Super-regional problems (an hour misses across all sites): assume 0 rainfall - these are only 1700 data points (0.01% of all data)
-# 2) Other problems: load data again and use the value from the closest cell that contains data as replacement
-# steps:
-# A) define bounding box
-# B) determine, which raster cells are in the bounding box and create a data frame with their ID
-# C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
-#    (number of rows is equal the number of raster cells in the bounding box)
-# D) create a loop for each unique months (data file) that needs to be loaded. 
-# within the loop get a second for the unique hours within the data frame where we have missing data
-# E) Then create a third loop for each of the traps that has missing data for that hour.
-# F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
-# G) add this value to the 'missing' data-frame at the right position
-
-
-
-
-
 # inter-landscape extrapolation impossible
 sum(no.unique.ID$freq_NAs[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data)])
 
@@ -534,27 +533,40 @@ length(unique(x$hour))
 length(unique(all.dat.temp.prec$hour))
 
 
-rm(x,y,missing,check, count)
 
-# --> here are some NAs in the data itself. These we need to replace by mean values of the hrs before and after.
+# To do:
+# 1) Super-regional problems (an hour misses across all sites): assume 0 rainfall - these are only 1700 data points (0.01% of all data) --> replace these entries with 0
+
+# 2) Other problems: load data again and use the value from the closest cell that contains data as replacement
+# steps:
+# A) define bounding box
+# B) determine, which raster cells are in the bounding box and create a data frame with their ID
+# C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
+#    (number of rows is equal the number of raster cells in the bounding box)
+# D) create a loop for each unique months (data file) that needs to be loaded. 
+# within the loop get a second for the unique hours within the data frame where we have missing data
+# E) Then create a third loop for each of the traps that has missing data for that hour.
+# F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
+# G) add this value to the 'missing' data-frame at the right position
+
+
+# 5.6 Replace missing precipitation data
+## 5.6.1 Super-regional problems (an hour misses across all sites): assume 0 rainfall
+
+# identify super-regional problems (an hour misses across all sites)
+x<-no.unique.ID[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data),]
+
+# add landscape ID & unique.ID to all.dat.temp.prec 
+all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
+all.dat.temp.prec$unique.ID<-paste0(all.dat.temp.prec$hour, all.dat.temp.prec$landscape)
+
+# replace missing precipitation values for super-regional problems with 0
+
+all.dat.temp.prec$prec[which(all.dat.temp.prec$unique.ID == x$no.unique.ID,)] <- 0
 
 
 
 
-# test NA values in extracted.data.prec:
-## e.g.:
-#layer: 270
-#link: 2010/RW2017.002_201005.tar.gz
-link <- "hourly/radolan/reproc/2017_002/bin/2010/RW2017.002_201005.tar.gz"  # 25 MB
-file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
-rad <- readDWD(file)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=269)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=270)
-plotRadar(rad$dat, main=".binary RW", extent="rw", layer=271)
-rad$dat[[269]]
-rad$dat[[270]]
-rad$dat[[271]]
-# --> no data available for respective layer (270)
 
 
 ### next steps:
@@ -562,123 +574,8 @@ rad$dat[[271]]
 #(iii) back-transform the data so it is read to use 
 #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
 #(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
-#     for co-lineraity, non-linearty and different scales
+#     for co-linearity, non-linearity and different scales
 # (v) look as seasonality effects
-
-
-
-# 6. compute suitability scores for wild-bee pollination for each sampling interval  -------
-
-# there are three constants in the formula that defines the suitability of temp for pollination
-# here, we define their range
-t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
-t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
-sigma <- seq(0.5,5, length=10) # defines the shape of the sigmodid shape of bee activity below t.opt
-constants.grid<- expand.grid(t.opt, t.max, sigma)
-names(constants.grid) <- c("t.opt", "t.max", "sigma")
-# account for the fact that max temp needs to be at least 1 degree above opt. temperature
-constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max+1),]
-rm(t.opt, t.max, sigma)
-
-# we create a procedure that will be implemented for each sampling period in a loop
-for (i in 1:length(input.data)){
-  placeholder<-  input.data[[i]] # we extract the climate data of a given sampling period
-  # for now, we assume made-up data, we can delete this later... 
-  placeholder<- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
-  # prepare output data-frame for a given sampling period
-  output.period<-c()
-  # we compute for each hour the suitability score for each combinations of constants in the grid
-  for(j in 1:nrow(constants.grid)){
-    suitability.estimate<-rep(0, nrow(placeholder)) #we create a vector for the suitability scores for each hr
-    
-    #define which hrs had a rainfall of 0 and temp below or above the optimum
-    below.opt<-which(placeholder$rainfall==0 & placeholder$temp <= constants.grid$t.opt[j])
-    above.opt<-which(placeholder$rainfall==0 & placeholder$temp > constants.grid$t.opt[j])
-    
-    # compute the suitability score for temp above and below the temp optimum separately 
-    suitability.estimate[below.opt]<- exp(-((placeholder$temp[below.opt]-constants.grid$t.opt[j])/
-                                              (2*constants.grid$sigma[j]))^2)
-    suitability.estimate[above.opt]<- 1-((placeholder$temp[above.opt]-constants.grid$t.opt[j])/
-                                           (constants.grid$t.opt[j]- constants.grid$t.max[j]))^2
-    
-    # negative suitability values need to be set to 0
-    suitability.estimate[which(suitability.estimate<0)]<-0
-    
-    # output for each sampling period needs to be prepared and saved
-    suitability.score<-sum(suitability.estimate)
-    output.period<-c(output.period, suitability.score)
-  }
-  output<-cbind(output, output.period)
-}
-rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
-
-### 7. load in predictors and response variables and prepare them  -------
-
-# load in data
-meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
-site.env.data<-read.csv('analysis_bees_diversity/data/env_data_ecosystematlas_elevation.csv', 
-                        dec = '.', sep = ',')
-
-# match site.data with meta-data
-matching<-match(meta.trapyearseason$site, site.env.data$TRAP)
-site.env.data<-site.env.data[matching,]
-site.env.data<-site.env.data[,-which(colnames(site.env.data)=='YEAR')]
-
-# compute additional predictors 
-# habitat richness: should probably only be calculated from semi-natural habitats
-library(vegan)
-seminat<- colnames(site.env.data)[c(5,8:12,16)]
-meta.trapyearseason$hab.div<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){length(which(x>0))})
-meta.trapyearseason$hab.even<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){
-  diversity(x, index = 'shannon')/log(specnumber(x))})
-meta.trapyearseason$hab.proportion<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){sum(x)})
-
-rm(seminat)
-
-# add the elevation data to the meta data
-meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
-meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
-
-### 7. start modelling the impact of exposure time on abundance and richness  -------
-library(lme4); library(lmerTest)
-abund.1<-lmer(data= meta.trapyearseason, 
-              abundance~ exposure_days + season + exposure_days:season + 
-                elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
-                (1|location)+(1|year)+(1|site), REML = T)
-abund.1<-lmer(data= meta.trapyearseason, 
-              abundance~ exposure_days + season + exposure_days:season + 
-                elevation_mean_400m + elevation_range_400m + year +
-                (1|location)+(1|year)+(1|site), REML = T)
-summary(abund.1)
-
-
-rich.1<-lmer(data= meta.trapyearseason, 
-             richness~ exposure_days + season + exposure_days:season + 
-               elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
-               (1|location)+(1|year)+(1|site), REML = T)
-summary(rich.1)
-
-library(performance) 
-r2(rich.1)
-r2(abund.1)
-
-
-library(ggplot2)
-
-# look at abundance trend over time... 
-ggplot(data= meta.trapyearseason, aes(x=year,))
-
-colnames(meta.trapyearseason)
-str(meta.trapyearseason)
-# IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
-
-### 8. start modelling the grid for the suitability score and identify the best solution  -------
-
-# run the regression analysis for all constant combinations...
-for(i in 1:ncol(output)){print(i)
-  meta.trapyearseason$suitability<-output[,i]
-}
-
 
 
 

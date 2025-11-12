@@ -1,4 +1,8 @@
-# 6. compute suitability scores for wild-bee pollination for each sampling interval  -------
+# 1. load in data
+meta.sample<- read.csv('analysis_bees_diversity/data/data_raw/Bee_Data2010-2021_with_quality_scores.csv',sep = ';', dec = ',')
+
+
+# 2. compute suitability scores for wild-bee pollination for each sampling interval  -------
 
 # there are three constants in the formula that defines the suitability of temp for pollination
 # here, we define their range

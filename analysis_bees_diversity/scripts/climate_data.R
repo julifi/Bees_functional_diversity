@@ -458,6 +458,7 @@ all.dat.temp.prec <- left_join(all.dat.temp, extracted.data.prec, by = c("raster
 # check for NAs
 temp.NA <- which(is.na(all.dat.temp.prec$temp)) # nice - the T data is complete
 prec.NA <- which(is.na(all.dat.temp.prec$prec)) # here we have a couple of NAs; these are not because of data entry mistakes
+
 # but reflect true missing data: 
 # # test NA values in extracted.data.prec:
 # ## e.g.:
@@ -535,7 +536,6 @@ length(unique(all.dat.temp.prec$hour))
 
 
 # To do:
-# 1) Super-regional problems (an hour misses across all sites): assume 0 rainfall - these are only 1700 data points (0.01% of all data) --> replace these entries with 0
 
 # 2) Other problems: load data again and use the value from the closest cell that contains data as replacement
 # steps:
@@ -543,35 +543,176 @@ length(unique(all.dat.temp.prec$hour))
 # B) determine, which raster cells are in the bounding box and create a data frame with their ID
 # C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
 #    (number of rows is equal the number of raster cells in the bounding box)
-# D) create a loop for each unique months (data file) that needs to be loaded. 
+# D) create a loop for each unique months (data file) that needs to be loaded. (only select months for which data is missing)
 # within the loop get a second for the unique hours within the data frame where we have missing data
 # E) Then create a third loop for each of the traps that has missing data for that hour.
 # F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
 # G) add this value to the 'missing' data-frame at the right position
 
 
-# 5.6 Replace missing precipitation data
-## 5.6.1 Super-regional problems (an hour misses across all sites): assume 0 rainfall
+# 5.6 Replace missing precipitation data -----------------------------------------------
 
-# identify super-regional problems (an hour misses across all sites)
-x<-no.unique.ID[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data),]
+# ## OLD: 5.6.1 Super-regional problems (an hour misses across all sites): assume rainfall of 0 mm
+# ## these are only 1704 data points (0.01% of all data)
+# 
+# # identify super-regional problems (an hour misses across all sites)
+# x<-no.unique.ID[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data),]
+# 
+# # add landscape ID & unique.ID to all.dat.temp.prec
+# all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
+# all.dat.temp.prec$unique.ID<-paste0(all.dat.temp.prec$hour, all.dat.temp.prec$landscape)
+# 
+# # replace missing precipitation values for super-regional problems with 0
+# all.dat.temp.prec$prec <- ifelse(all.dat.temp.prec$unique.ID %in% x$no.unique.ID,
+#                           0,
+#                           all.dat.temp.prec$prec)
+#
 
-# add landscape ID & unique.ID to all.dat.temp.prec 
-all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
-all.dat.temp.prec$unique.ID<-paste0(all.dat.temp.prec$hour, all.dat.temp.prec$landscape)
+## 5.6.1 Bounding box --------------
+### Precipitation data: create reference raster
+link <- "hourly/radolan/reproc/2017_002/bin/2017/RW2017.002_201712.tar.gz"
+file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
+rad <- readDWD(file, selection=1:2)
+raster_ref_prec <- rad$dat[[1]]
+#check projection of precipitation data: 
+crs(raster_ref_prec) # --> no CRS given but information given in metadata on projection of the RADOLAN precipitation raster: "+proj=stere +lat_0=90.0 +lon_0=10.0 +lat_ts=60.0+a=6370040 +b=6370040 +units=m"
+# assign CRS: 
+raster_ref_prec <- projectRasterDWD(raster_ref_prec,
+                                    proj = "radolan")
 
-# replace missing precipitation values for super-regional problems with 0
+# project raster in order to be able to calculate metric distances
+raster_ref_prec_proj <- project(raster_ref_prec, "EPSG:3857")
 
-all.dat.temp.prec$prec[which(all.dat.temp.prec$unique.ID == x$no.unique.ID,)] <- 0
+### load spatial data of TERENO sites 
+sites <- read_excel("analysis_bees_diversity/data/data_raw/site_descriptions.xlsx", sheet = "site_descriptions")
+sites <- sites[c("SITE", "TRAP", "YEAR", "coordinates", "...5")]
+sites  <- dplyr::rename(sites, "Site" = "SITE")
+sites  <- dplyr::rename(sites, "Trap" = "TRAP")
+sites  <- dplyr::rename(sites, "Year" = "YEAR")
+sites  <- dplyr::rename(sites, "lon" = "coordinates")
+sites  <- dplyr::rename(sites, "lat" = "...5")
+# remove empty top rows  
+sites  <- sites[3:nrow(sites),]
+
+sites_2010 <- dplyr::filter(sites, Year == 2010)
+sites_2010 <- sites_2010[c("Trap", "lon", "lat")]
+sites_2010 <- sites_2010[,c(3,2,1)]
+sites_2010$lat <- as.numeric(sites_2010$lat)
+sites_2010$lon <- as.numeric(sites_2010$lon)
+sites_2010 <- as.data.frame(sites_2010)
+
+# convert site point data into SpatVector 
+sites_s <- vect(sites_2010, geom = c("lon", "lat"), crs="+proj=longlat")
+
+# convert site point data into sf object
+sites_sf <- st_as_sf(sites_2010, 
+                     coords = c("lon", "lat"), 
+                     crs="+proj=longlat")
+# project site point data (in order to later calculate a metric distance)
+sites_proj <- st_transform(sites_sf, crs = 3857) # using EPSG:3857 WGS 84 / Pseudo-Mercator -- Spherical Mercator
+
+
+#create buffer of 30 km around trap sites (30 000 m)
+sites_buffer <- st_buffer(sites_proj, dist = 30000)
+# create bounding box:
+bbox <- st_bbox(sites_buffer)
+# transform bbox into polygon and then into sf object: 
+bbox_poly <- st_as_sfc(bbox)
+bbox_sf <- st_sf(geometry = bbox_poly)
+
+# create list of cell-IDs of precipitation raster which overlap with bounding box of sites + buffers
+cell_id_bbox <- cells(raster_ref_prec_proj, vect(bbox_sf))
+cell_ids <- as.vector(unlist(cell_id_bbox[,2]))
+
+
+## 5.6.2 Create dataframe with distances between site points and cells within the bounding box of sites + buffers -------------- 
+# extract cell center from list of cell ids:
+cell_id_coords <- terra::xyFromCell(raster_ref_prec_proj, cell_ids)
+
+# transform into sf object: 
+# In sf umwandeln
+cell_sf <- st_as_sf(
+  data.frame(cell_id = cell_ids, cell_id_coords),
+  coords = c("x", "y"),
+  crs = st_crs(sites_proj)
+)
+
+#  create matrix with distances between site points and cell_id center points
+dist_matrix <- st_distance(cell_sf, sites_proj)  # Ergebnis: units-Matrix (m)
+
+# transform matrix into dataframe
+dist_df <- as.data.frame(dist_matrix)
+colnames(dist_df) <- sites_proj$Trap
+dist_df$cell_id <- cell_sf$cell_id
+dist_df <- dist_df |> relocate(cell_id)
+#rownames(dist_df) <- cell_ids
+
+## 5.6.3 Loop through precipitation raster and extract precipitation value of the raster cell which is closest to the site point 
+
+# dataframe with distances between site points and raster cells: dist_df 
+# dataframe with missing data: missing
+
+#remove unneccessary columns from missing
+missing[,c("nc_temp", "cellID_temp", "temp")] <- NULL
+
+unique.tar<-unique(missing$link_prec)
+
+# extract missing precipitation data
+missing.data.prec<-c()
+for(i in 1:length(unique.tar)){
+  print(i)
+  link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
+  file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
+  rad <- readDWD(file, dividebyten=FALSE)
+  
+  selection<-which(missing$link_prec==unique.tar[i])
+  unique.layer<-unique(missing$raster_nr[selection])
+  for (k in 1:length(unique.layer)){
+    print(k)
+    layer <- rad$dat[[unique.layer[k]]]
+    # assign CRS: 
+    layer <- projectRasterDWD(layer,proj = "radolan")
+
+    # check if layer only contains NA; if TRUE --> assign 0 as precipitation value
+    if(allNA(layer) == TRUE){
+      extracted2 <- data.frame(prec = 0,
+                             cellID_prec = unique.cells,
+                             raster_nr = rep(unique.layer[k], length(unique.cells)),
+                             link_prec = rep(unique.tar[i], length(unique.cells)))
+    }
+    else{
+    selection2<- which(missing$link_prec==unique.tar[i] & missing$raster_nr==unique.layer[k])
+    unique.cells<-unique(missing$cellID_prec[selection2])
+    ## to do: check individual cells for closest neighbouring cell (using distance dataframe)
+        # before: - recalculate distance matrix (in there: change column names from traps to cellIds from the traps (--> fewer columns?))
+        #         - check again order of projection: first identify cellIDs, then project and calculate distance between cells?
+    # loop through unique.cells: each cell within unique.cells has its own column within the distance matrix --> check the neighboruing cells for non-NA values
+    # bind to data.frame??? 
+    
+    
+    extracted <- data.frame(prec = (terra::extract(layer, unique.cells)),
+                           cellID_prec = unique.cells,
+                           raster_nr = rep(unique.layer[k], length(unique.cells)),
+                           link_prec = rep(unique.tar[i], length(unique.cells)))
+    colnames(extracted)[1]<-c('prec')
+    }
+    
+    missing.data.prec<-rbind(missing.data.prec, extracted)
+  }
+}
+
+# save data on extracted prec values
+write.csv(missing.data.prec,"analysis_bees_diversity/data/data_weather/missing.data.prec.csv", row.names = FALSE)
 
 
 
-
-
+# note: temperature and precipitation raster have different cell IDs for the same Traps as though they have the same projection the raster extent is different 
 
 ### next steps:
 #(ii) combine extracted.data.temp and extracted.data.prec 
 #(iii) back-transform the data so it is read to use 
+
+
 #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
 #(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
 #     for co-linearity, non-linearity and different scales

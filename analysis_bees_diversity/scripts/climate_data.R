@@ -743,15 +743,11 @@ all.dat.temp.prec <- all.dat.temp.prec %>%
 which(is.na(all.dat.temp.prec$prec))
 
 # save data on extracted prec & temp values
-write.csv(all.dat.temp.prec,"analysis_bees_diversity/data/data_weather/all.dat.temp.prec.csv", row.names = FALSE)
+write.csv(all.dat.temp.prec,"analysis_bees_diversity/data/data_weather/all_dat_temp_prec.csv", row.names = FALSE)
 
 
-## 5.6 backtransform extracted temp and prec data into master data.frame ------------
+## 5.6 backtransform extracted temp and prec data ------------
 
-# needed: 'data_samp_clim': Large List (2258 elements) including 2258 lists with each list corresponding to one row in the dataframe 'meta.trapyearseason'
-
-meta.trapyearseason
-data_samp_clim
 
 
 ### next steps:

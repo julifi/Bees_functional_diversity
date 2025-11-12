@@ -1,4 +1,4 @@
-# 6. compute suitability scores for wild-bee pollination for each sampling interval  -------
+# 1. compute suitability scores for wild-bee pollination for each sampling interval  -------
 
 # there are three constants in the formula that defines the suitability of temp for pollination
 # here, we define their range
@@ -13,19 +13,19 @@ constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max
 rm(t.opt, t.max, sigma)
 
 # create output data frame that will contain for each sample (column) all different suitability scores
-output<- c()
+output <- c()
 
 # we create a procedure that will be implemented for each sampling period in a loop
 for (i in 1:length(input.data)){
   
   # we extract the climate data of a given sampling period
-  placeholder<-  input.data[[i]]
+  placeholder <-  input.data[[i]]
   
-  # for now, we assume made-up data, we can delete this later... 
-  placeholder<- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
+  # for now, we assume made-up data, we can delete this later ... 
+  placeholder <- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
   
   # prepare output data-frame for a given sampling period
-  output.period<-c()
+  output.period <-c()
 
   # we compute for each hour the suitability score for each combinations of constants in the grid
   for(j in 1:nrow(constants.grid)){
@@ -55,7 +55,9 @@ for (i in 1:length(input.data)){
 }
 rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
 
-### 7. load in predictors and response variables and prepare them  -------
+
+
+### 2. load in predictors and response variables and prepare them  -------
 
 # load in data
 meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
@@ -82,7 +84,7 @@ rm(seminat)
 meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
 meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
 
-### 7. start modelling the impact of exposure time on abundance and richness  -------
+### 3. start modelling the impact of exposure time on abundance and richness  -------
 library(lme4); library(lmerTest)
 abund.1<-lmer(data= meta.trapyearseason, 
               abundance~ exposure_days + season + exposure_days:season + 
@@ -116,7 +118,7 @@ colnames(meta.trapyearseason)
 str(meta.trapyearseason)
 # IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
 
-### 8. start modelling the grid for the suitability score and identify the best solution  -------
+### 4. start modelling the grid for the suitability score and identify the best solution  -------
 
 # run the regression analysis for all constant combinations...
 for(i in 1:ncol(output)){print(i)

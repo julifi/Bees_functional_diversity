@@ -110,8 +110,7 @@ dat_all$uniqueID<-paste0(dat_all$LocTrap,dat_all$year)
 # dat_all$year[which(dat_all$uniqueID=='HAR152020' & dat_all$EndDate== dat_all$EndDate[55953]
 #                    & dat_all$StartDate== dat_all$StartDate[55953])]<-2021
 
-dat_all<-dat_all[-which(dat_all$uniqueID=='HAR152020' & 
-                          dat_all$EndDate== dat_all$EndDate[55953]& dat_all$StartDate== dat_all$StartDate[55953]),]
+dat_all<-dat_all[-which(dat_all$uniqueID=='HAR152020' & as.character(dat_all$StartDate)== '2020-08-18'),]
 
 
 # further there is a wrong sampling starting date for one spring sampling in spring 2012 - correct that:
@@ -329,11 +328,24 @@ meta.sample$mean.sampling.date<-
   yday(meta.sample$StartDate) + (yday(meta.sample$EndDate)-yday(meta.sample$StartDate))/2
 
 rm(x, honey.bees, meta.spring, meta.summer)
-# write meta data
-write.csv(meta.sample,'analysis_bees_diversity/data/meta.sample.csv')
-write.csv(meta,'analysis_bees_diversity/data/meta.site_year.csv')
 
-### B) create species matrices (abundance and biomass) #####
+dat_all2<-dat_all
+dat_all2$sample.ID<-paste0(dat_all2$uniqueID, ' ', dat_all2$StartDate)
+
+x<- unique(dat_all2$sample.ID)
+dat_all$sample.ID<-paste0(dat_all$uniqueID, ' ', dat_all$Start)
+y<- unique(dat_all$sample.ID)
+
+x[which(is.element(x,y)==F)]
+y[which(is.element(y,x)==F)]
+
+missing.samples<-data.frame(missing.samples =c(x[which(is.element(x,y)==F)], y[which(is.element(y,x)==F)]),
+                            missing.in = c(rep('Mark.V2', length(x[which(is.element(x,y)==F)])),'Mark.V1'))
+
+write.csv(missing.samples, 'analysis_bees_diversity/data/missing_samples.csv')
+
+
+###### B) create species matrices (abundance and biomass) ########
 ### B.1) General preparations ####
 # (i) create new column on abundance of both females and males
 # use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
@@ -383,29 +395,40 @@ plot(meta.sample$total.abundance[which(meta.sample$total.abundance<500)],
 meta.sample$total.abundance[which(meta.sample$total.abundance>500)]
 #hmm that is really quite high... is this realistic?
 
+# (v) create meta data for site-year-season  
+meta.season.site<-rbind(meta[ ,1:4], meta[ ,1:4])
+meta.season.site$season<-rep(c('spring','summer'), each = nrow(meta))
+meta.season.site$StartDate<-c(meta$spring.start, meta$summer.start)
+meta.season.site$EndDate<-c(meta$spring.end, meta$summer.end)
+meta.season.site$gap.start<-c(meta$spring.gap.start, meta$summer.gap.start)
+meta.season.site$gap.end<-c(meta$spring.gap.end, meta$summer.gap.end)
+meta.season.site$exposure<-c(meta$spring.exposure, meta$summer.exposure)
 
-### B.2) different species matrix ####
+# remove rows where no sampling took place
+meta.season.site<-meta.season.site[-which(is.na(meta.season.site$StartDate)),]
 
-# one for total abundance combined (f and m (without communal species)), 
-# one for total biomass combined (f and m (without communal species))
-# one for total presence/absence combined (f and m)
-# base species matrix
-cm.base <-matrix(nrow = nrow(meta), ncol=length(spec.list), rep(0,nrow(meta)* length(spec.list)))
-colnames(cm.base) <- spec.list; rownames(cm.base)<-meta$uniqueID
+### B.2) create matrix total abundance combined (f and m (without m of communal species)) ####
 
-# (iii) create matrix total abundance combined (f and m (without m of communal species))
-# create new column on abundance of both females and males
-# use: merging parameter showing whether males should be used or not: consider_males (1: males shall be considered; 0: males shall not be considered)
+x<- dat_all[,c(5,10,7,14)]
+cm.sample<-as.data.frame(pivot_wider(data = x, names_from = GenSpec, values_from = Females_Males))
+x<-cm.sample[,c(1,2)]
+cm.sample<-t(cm.sample[,-c(1,2)])
+for(i in 1:ncol(cm.sample)){which(cm.sample[,i]==NULL)}
 
-### 2.B) Create season-specific values ####
+i<-1
 
+cm.sample[,i]==NULL
+
+  
+help(pivot_wider)
+# 1) First aggregate the data 
 
 
 
 # aggregate abundance on year-trap-season level:
 abundance_year_trap<-aggregate(list(abundance_female = dat_all$Females, abundance_male = dat_all$Males, 
-                                    abundance_total = dat_all$Females_Males),  by=list(
-                                      dat_all$LocName,dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season),
+                                    abundance_total = dat_all$Females_Males),  
+                               by=list(dat_all$LocName,dat_all$LocTrap, dat_all$year, dat_all$GenSpec, dat_all$season),
                                  function(x){sum(x, na.rm=T)})
 colnames(abundance_year_trap)[1:5]<-c("LocName", "LocTrap","year", "GenSpec","season")
 abundance_year_trap$uniqueID<-paste0(abundance_year_trap$LocTrap,abundance_year_trap$year)
@@ -436,30 +459,9 @@ y<-aggregate (abundance_year_trap$abundance_total, by=list(
 # some diagnostics
 sum(x$x); mean(y$x) # we have in total 190627 individuals and on average 84 per season from 5.8 species
 
-meta.trapyearseason<- cbind(x,y$x)
-colnames(meta.trapyearseason)<-c('location','site','year','season', 'abundance','richness')
-
-# add exposure days to the meta-data
-# create ID to link the two files (target and meta file that contains the desired info)
-ID_meta_trapyearseason<-paste0(meta.trapyearseason$site, meta.trapyearseason$year)
-ID_meta<-paste0(meta$LocTrap, meta$year)
-
-# create column in target
-meta.trapyearseason$exposure_days<-NA
-
-# define which columns to select for spring and summer season
-spri<-which(meta.trapyearseason$season=='spring')
-summ<-which(meta.trapyearseason$season=='summer')
-
-# add info
-meta.trapyearseason$exposure_days[spri]<- meta$spring.exposure[match(ID_meta_trapyearseason[spri], ID_meta)]
-meta.trapyearseason$exposure_days[summ]<- meta$summer.exposure[match(ID_meta_trapyearseason[summ], ID_meta)]
-
-# check whether we have somewhere a mistake
-which(is.na(meta.trapyearseason$exposure_days))
 
 write.csv(meta.trapyearseason, 'analysis_bees_diversity/data/meta.trapyearseason.csv', row.names = F)
-rm(x,y, ID_meta_trapyearseason, ID_meta, spri, summ)
+
 
 # (v) create matrix total biomass combined (f and m (without communal species))
 # create new column on abundance of both females and males

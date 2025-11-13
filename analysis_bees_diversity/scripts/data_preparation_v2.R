@@ -383,7 +383,7 @@ y<-matrix(0, nrow = length(which(is.element(meta.sample$sample_ID,x$sample_ID)==
 colnames(y)<-colnames(cm.sample)
 cm.sample<-rbind(cm.sample, y)
 
-x<-rbind(x, meta.sample[which(is.element(meta.sample$sample_ID,x$sample_ID)==F)  ,c(4,7,9)])
+x<-rbind(x, meta.sample[which(is.element(meta.sample$sample_ID,x$sample_ID)==F)  ,c(8,4,10)])
 
 # now we have to order the columns in the CM so that they match with the meta-data
 cm.sample<-cm.sample[match(meta.sample$sample_ID,x$sample_ID),]

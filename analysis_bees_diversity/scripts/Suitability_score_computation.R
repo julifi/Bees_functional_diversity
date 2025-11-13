@@ -1,4 +1,25 @@
-# 1. compute suitability scores for wild-bee pollination for each sampling interval  -------
+# 1. load in data
+meta.sample<- read.csv('analysis_bees_diversity/data/meta_sample.csv',sep = ',', dec = '.')
+
+weather.data<- read.csv('analysis_bees_diversity/data/data_weather/all_dat_temp_prec.csv',sep = ',', dec = '.')
+
+# convert the dates into a date format
+weather.data$hour.x<- as.POSIXct(weather.data$hour.x, format = "%Y-%m-%d %H:%M:%S")
+
+# do the same for the meta data dates
+meta.sample$StartDate<- as.POSIXct( paste0(meta.sample$StartDate, ' 12:00:00'), format = "%Y-%m-%d %H:%M:%S")
+meta.sample$EndDate<- as.POSIXct( paste0(meta.sample$EndDate, ' 12:00:00'), format = "%Y-%m-%d %H:%M:%S")
+
+# create a list that contains for each sample (row in meta.sample) a data-frame with all daylight sampling hours 
+input.data<-list()
+for(i in 1:nrow(meta.sample)){
+  input.data[[i]]<-weather.data[which(weather.data$hour.x>=meta.sample$StartDate[i] & weather.data$hour.x<meta.sample$EndDate[i] &
+                                        weather.data$trap==meta.sample$site[i]) , ]
+  }
+
+rm(weather.data)
+
+# 2. compute suitability scores for wild-bee pollination for each sampling interval  -------
 
 # there are three constants in the formula that defines the suitability of temp for pollination
 # here, we define their range
@@ -9,31 +30,33 @@ constants.grid<- expand.grid(t.opt, t.max, sigma)
 names(constants.grid) <- c("t.opt", "t.max", "sigma")
 
 # account for the fact that max temp needs to be at least 1 degree above opt. temperature
-constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max+1),]
+constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max-1),]
 rm(t.opt, t.max, sigma)
 
 # create output data frame that will contain for each sample (column) all different suitability scores
-output <- c()
+output<- c()
+i<-1
+j<-951
 
 # we create a procedure that will be implemented for each sampling period in a loop
 for (i in 1:length(input.data)){
   
   # we extract the climate data of a given sampling period
-  placeholder <-  input.data[[i]]
+  placeholder<-  input.data[[i]]
   
-  # for now, we assume made-up data, we can delete this later ... 
-  placeholder <- data.frame(temp=seq(10,35, length=100), rainfall = sample(c(0,0,0,0,10),100, replace = T))
+  # this was for testing the code and see whether the relationships are correctly coded 
+  placeholder<- data.frame(temp=seq(0,35, length=1300), prec = sample(c(0,0,0,0,0),100, replace = T))
   
   # prepare output data-frame for a given sampling period
-  output.period <-c()
-
+  output.period<-c()
+  
   # we compute for each hour the suitability score for each combinations of constants in the grid
   for(j in 1:nrow(constants.grid)){
     suitability.estimate<-rep(0, nrow(placeholder)) #we create a vector for the suitability scores for each hr
     
     #define which hrs had a rainfall of 0 and temp below or above the optimum
-    below.opt<-which(placeholder$rainfall==0 & placeholder$temp <= constants.grid$t.opt[j])
-    above.opt<-which(placeholder$rainfall==0 & placeholder$temp > constants.grid$t.opt[j])
+    below.opt<-which(placeholder$prec==0 & placeholder$temp <= constants.grid$t.opt[j])
+    above.opt<-which(placeholder$prec==0 & placeholder$temp > constants.grid$t.opt[j])
     
     # compute the suitability score for temp above and below the temp optimum separately 
     suitability.estimate[below.opt]<- exp(-((placeholder$temp[below.opt]-constants.grid$t.opt[j])/
@@ -45,47 +68,115 @@ for (i in 1:length(input.data)){
     suitability.estimate[which(suitability.estimate<0)]<-0
     
     # diagnostics - works well
-    #plot(suitability.estimate~placeholder$temp)
+    plot(suitability.estimate~placeholder$temp)
     
     # output for each sampling period needs to be prepared and saved
     suitability.score<-sum(suitability.estimate)
     output.period<-c(output.period, suitability.score)
   }
   output<-cbind(output, output.period)
+  # columns are samples, rows are combinations of constants
+  print(i)
 }
-rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder)
+suitability.matrix<-t(output) # columns are combinations of constants, rows are samples
+rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt, placeholder, output)
 
+### 3. determine the optimal constant combination for computing the suitability score  -------
 
-
-### 2. load in predictors and response variables and prepare them  -------
-
-# load in data
-meta.trapyearseason<- read.csv('analysis_bees_diversity/data/meta.trapyearseason.csv')
-site.env.data<-read.csv('analysis_bees_diversity/data/env_data_ecosystematlas_elevation.csv', 
-                        dec = '.', sep = ',')
-
-# match site.data with meta-data
-matching<-match(meta.trapyearseason$site, site.env.data$TRAP)
-site.env.data<-site.env.data[matching,]
-site.env.data<-site.env.data[,-which(colnames(site.env.data)=='YEAR')]
-
-# compute additional predictors 
-# habitat richness: should probably only be calculated from semi-natural habitats
-library(vegan)
-seminat<- colnames(site.env.data)[c(5,8:12,16)]
-meta.trapyearseason$hab.div<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){length(which(x>0))})
-meta.trapyearseason$hab.even<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){
-  diversity(x, index = 'shannon')/log(specnumber(x))})
-meta.trapyearseason$hab.proportion<-apply(site.env.data[ ,c(5,8:12,16)],1, function(x){sum(x)})
-
-rm(seminat)
-
-# add the elevation data to the meta data
-meta.trapyearseason$elevation_mean_400m<-site.env.data$elevation_mean_400m
-meta.trapyearseason$elevation_range_400m<-site.env.data$elevation_range_400m
-
-### 3. start modelling the impact of exposure time on abundance and richness  -------
 library(lme4); library(lmerTest)
+
+# we work with log abundance to make outliers less influential
+meta.sample$log.ab<-log(meta.sample$total.abundance+1)
+
+AIC.with.interaction<-c()
+AIC.without.interaction<-c()
+
+for(i in 1:ncol(suitability.matrix)){
+  dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,i])
+  # without interaction effect
+  mod.1<-lmer(data= dat, 
+              log.ab~ suitability.score + season +  
+                (1|landscape/site)+(1|year), REML = T)
+  # with interaction effect
+  mod.2<-lmer(data= dat, 
+              log.ab~ suitability.score + season + suitability.score:season +
+                (1|landscape/site)+(1|year), REML = T)
+  AIC.with.interaction<-c(AIC.with.interaction, AIC(mod.1))
+  AIC.without.interaction<-c(AIC.without.interaction, AIC(mod.2))
+  print(i)
+}
+mod.output<-data.frame(AIC.with.interaction, AIC.without.interaction)
+mod.output<-mod.output[961:1920,]
+mod.output$min<-apply(mod.output,1,function(x){min(x)})
+
+best.constants<-which(mod.output$min==min(mod.output$min))
+#best.constants<-which(mod.output$AIC.without.interaction==min(mod.output$AIC.without.interaction))
+
+constants.grid[best.constants,]
+interaction<-which(mod.output[best.constants,]==min(mod.output[best.constants,]) )[1]
+
+if(interaction==1){
+  dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,best.constants])
+  # without interaction effect
+  best.suit.mod<-lmer(data= dat, 
+              log.ab~ suitability.score + season +  
+                (1|landscape/site)+(1|year), REML = T)}else{
+  dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,best.constants])
+  best.suit.mod<-lmer(data= dat, 
+              log.ab~ suitability.score + season + suitability.score:season +
+                (1|landscape/site)+(1|year), REML = T)}
+
+
+### 4. check whether suitability score is a better predictor of abundance than exposure days  -------
+
+# determine what exposure days model is better
+mod.days<-lmer(data=meta.sample, 
+               log.ab ~ exposure + season +
+              (1|landscape)+(1|year)+(1|site) , REML = T)
+mod.days2<-lmer(data= meta.sample, 
+                log.ab~ exposure + season + season:exposure + 
+                 (1|landscape)+(1|year)+(1|site) , REML = T)
+mod.days3<-lmer(data= meta.sample, 
+                log.ab~ exposure + season:exposure + 
+                  (1|landscape)+(1|year)+(1|site) , REML = T)
+AIC(mod.days, mod.days2, mod.days3, best.suit.mod)
+
+summary(best.suit.mod)
+plot(best.suit.mod)
+
+plot(meta.sample$exposure , dat$suitability.score)
+
+library(MuMIn)
+r.squaredGLMM(mod.days)
+
+library(DHARMa)
+simulateResiduals(mod.days, plot = T) # good model diagnostics...
+
+# This package does some automatic full-model comparison... all possible combinations... 
+library(buildmer); library(glmmTMB)
+teststs<-glmmTMB(total.abundance ~ exposure + season +
+                        (1|landscape)+(1|year)+(1|site), 
+                      family = poisson, data=meta.sample)
+summary(teststs)
+simulateResiduals(teststs, plot = T) # good model diagnostics...
+
+# To do: 
+# reflect on the results
+# try to run a model with suitability score that has been normalised by exposure days
+# try to extend the constant matrix and see what happens
+
+
+
+
+
+
+
+hist(meta.sample$log.ab, breaks= 500)
+hist(weather.data$temp, breaks= 500)
+hist(log(weather.data$prec+1), breaks= 500)
+
+
+
 abund.1<-lmer(data= meta.trapyearseason, 
               abundance~ exposure_days + season + exposure_days:season + 
                 elevation_mean_400m + elevation_range_400m + hab.even + hab.proportion + hab.div+ year +
@@ -118,7 +209,7 @@ colnames(meta.trapyearseason)
 str(meta.trapyearseason)
 # IDEA: water (rivers) might be a good additional predictor - we could explore this at a later point in time
 
-### 4. start modelling the grid for the suitability score and identify the best solution  -------
+### 8. start modelling the grid for the suitability score and identify the best solution  -------
 
 # run the regression analysis for all constant combinations...
 for(i in 1:ncol(output)){print(i)

@@ -110,9 +110,8 @@ meta$LocTrap[which(meta$LocTrap=='FBG02*')]<-'FBG02'
 # depending on: light availability (day time) and start/ end of sampling period (assumes a establishment and abolisment of traps at noon)
 
 # read prepared sampling data:
-sampling.days <- readRDS("analysis_bees_diversity/data/sampling_days_siteyseason.RData")
-data_samp_clim <- sampling.days
-
+data_sampling <- readRDS("analysis_bees_diversity/data/sampling_days_siteyseason.RData")
+data_samp_clim <- data_sampling
 
 # add column with 'hour'; replicate each row 23times --> for 'hour' passing values from 00:00:00 to 23:00:00
 # create vector with values from 00:00 to 23:00 
@@ -146,49 +145,49 @@ for(i in 1:length(data_samp_clim)){
   # check if data.frame covers spring or summer season
   if(grepl('dates.spring', colnames(data_samp_clim[[i]]))[1] == TRUE){
     data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                       ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                              ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                                     ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), 
-                                                            data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+           ifelse((data_samp_clim[[i]]$`startend.spring` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), 
+                  data_samp_clim[[i]]$hour, data_samp_clim[[i]]$hour))))
     
     # get month to exclude non-daytime hours: 
     m <- as.numeric(format(data_samp_clim[[i]]$dates.spring, "%m"))
     
   }else{
     data_samp_clim[[i]]$hour <- ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour < "12:00:00"), NA, 
-                                       ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
-                                              ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
-                                                     ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour,
-                                                            data_samp_clim[[i]]$hour))))
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 1 & data_samp_clim[[i]]$hour >= "12:00:00"), data_samp_clim[[i]]$hour, 
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour >= "12:00:00"), NA, 
+         ifelse((data_samp_clim[[i]]$`startend.summer` == 2 & data_samp_clim[[i]]$hour < "12:00:00"), data_samp_clim[[i]]$hour,
+                data_samp_clim[[i]]$hour))))
     # get month to exclude non-daytime hours: 
     m <- as.numeric(format(data_samp_clim[[i]]$dates.summer, "%m"))
   }
   
   # exclude non-daytime hours
   data_samp_clim[[i]]$hour <- ifelse((m == 1 & data_samp_clim[[i]]$hour < "08:00:00"), NA, 
-                                     ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
-                                            ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                   ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                                          ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                 ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
-                                                                        ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                               ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                                                                      ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                                                                             ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                                                                                    ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                                                                                           ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                                                                                                  ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
-                                                                                                                         ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
-                                                                                                                                ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
-                                                                                                                                       ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
-                                                                                                                                              ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
-                                                                                                                                                     ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
-                                                                                                                                                            ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                   ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
-                                                                                                                                                                          ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                                 ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
-                                                                                                                                                                                        ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
-                                                                                                                                                                                               ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
+ifelse((m == 1 & data_samp_clim[[i]]$hour > "16:00:00"), NA, 
+ifelse((m == 2 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 2 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+ifelse((m == 3 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 3 & data_samp_clim[[i]]$hour > "17:00:00"), NA,
+ifelse((m == 4 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 4 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+ifelse((m == 5 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+ifelse((m == 5 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+ifelse((m == 6 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+ifelse((m == 6 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+ifelse((m == 7 & data_samp_clim[[i]]$hour < "04:00:00"), NA, 
+ifelse((m == 7 & data_samp_clim[[i]]$hour > "21:00:00"), NA,
+ifelse((m == 8 & data_samp_clim[[i]]$hour < "05:00:00"), NA, 
+ifelse((m == 8 & data_samp_clim[[i]]$hour > "20:00:00"), NA,
+ifelse((m == 9 & data_samp_clim[[i]]$hour < "06:00:00"), NA, 
+ifelse((m == 9 & data_samp_clim[[i]]$hour > "19:00:00"), NA,
+ifelse((m == 10 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 10 & data_samp_clim[[i]]$hour > "18:00:00"), NA,
+ifelse((m == 11 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 11 & data_samp_clim[[i]]$hour > "16:00:00"), NA,
+ifelse((m == 12 & data_samp_clim[[i]]$hour < "07:00:00"), NA, 
+ifelse((m == 12 & data_samp_clim[[i]]$hour > "16:00:00"), NA, data_samp_clim[[i]]$hour))))))))))))))))))))))))
   
   # remove rows with NAs within column 'hour' (as these fall outside the sampling hours within start or end days)
   data_samp_clim[[i]] <- dplyr::filter(data_samp_clim[[i]],  !is.na(hour))
@@ -262,10 +261,6 @@ for(i in 1:length(data_samp_clim)){
   data_samp_clim[[i]]$link_prec <- link_prec
 }
 rm(x,y,raster_nr, nc_name, link_prec, daytime_hours)
-
-
-# save "data_samp_clim"
-write.csv(data_samp_clim,"analysis_bees_diversity/data/data_weather/all.dat.csv", row.names = FALSE)
 
 
 # 5. Extraction of data from raster files -------
@@ -533,8 +528,47 @@ sum(no.unique.ID$freq_NAs)-sum(no.unique.ID$freq_NAs[which(no.unique.ID$freq_NAs
 x<-no.unique.ID[which(no.unique.ID$freq_NAs == no.unique.ID$freq_data_landscape & 
                         no.unique.ID$freq_all_data != no.unique.ID$freq_missing_whole_data),]
 
+sum(x$freq_NAs)
+length(unique(x$link_prec))
+length(unique(x$hour))
+length(unique(all.dat.temp.prec$hour))
 
-## 5.5.2 Bounding box --------------
+
+
+# To do:
+
+# 2) Other problems: load data again and use the value from the closest cell that contains data as replacement
+# steps:
+# A) define bounding box
+# B) determine, which raster cells are in the bounding box and create a data frame with their ID
+# C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
+#    (number of rows is equal the number of raster cells in the bounding box)
+# D) create a loop for each unique months (data file) that needs to be loaded. (only select months for which data is missing)
+# within the loop get a second for the unique hours within the data frame where we have missing data
+# E) Then create a third loop for each of the traps that has missing data for that hour.
+# F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
+# G) add this value to the 'missing' data-frame at the right position
+
+
+# 5.6 Replace missing precipitation data -----------------------------------------------
+
+# ## OLD: 5.6.1 Super-regional problems (an hour misses across all sites): assume rainfall of 0 mm
+# ## these are only 1704 data points (0.01% of all data)
+# 
+# # identify super-regional problems (an hour misses across all sites)
+# x<-no.unique.ID[which(no.unique.ID$freq_all_data == no.unique.ID$freq_missing_whole_data),]
+# 
+# # add landscape ID & unique.ID to all.dat.temp.prec
+# all.dat.temp.prec$landscape<- substr(all.dat.temp.prec$trap,0,3)
+# all.dat.temp.prec$unique.ID<-paste0(all.dat.temp.prec$hour, all.dat.temp.prec$landscape)
+# 
+# # replace missing precipitation values for super-regional problems with 0
+# all.dat.temp.prec$prec <- ifelse(all.dat.temp.prec$unique.ID %in% x$no.unique.ID,
+#                           0,
+#                           all.dat.temp.prec$prec)
+#
+
+## 5.6.1 Bounding box --------------
 ### Precipitation data: create reference raster
 link <- "hourly/radolan/reproc/2017_002/bin/2017/RW2017.002_201712.tar.gz"
 file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE)
@@ -569,21 +603,17 @@ sites_2010 <- as.data.frame(sites_2010)
 
 # convert site point data into SpatVector 
 sites_s <- vect(sites_2010, geom = c("lon", "lat"), crs="+proj=longlat")
-# extract grid cell IDs of sites for precipitation data
-sites_2010$cell_id_sites <- cellFromXY(raster_ref_prec, crds(sites_s)) 
-
-
 
 # convert site point data into sf object
 sites_sf <- st_as_sf(sites_2010, 
                      coords = c("lon", "lat"), 
                      crs="+proj=longlat")
 # project site point data (in order to later calculate a metric distance)
-#sites_proj <- st_transform(sites_sf, crs = 3857) # using EPSG:3857 WGS 84 / Pseudo-Mercator -- Spherical Mercator
+sites_proj <- st_transform(sites_sf, crs = 3857) # using EPSG:3857 WGS 84 / Pseudo-Mercator -- Spherical Mercator
+
 
 #create buffer of 30 km around trap sites (30 000 m)
-buffer_dist <- 30000
-sites_buffer <- st_buffer(sites_sf, dist = buffer_dist)
+sites_buffer <- st_buffer(sites_proj, dist = 30000)
 # create bounding box:
 bbox <- st_bbox(sites_buffer)
 # transform bbox into polygon and then into sf object: 
@@ -591,45 +621,33 @@ bbox_poly <- st_as_sfc(bbox)
 bbox_sf <- st_sf(geometry = bbox_poly)
 
 # create list of cell-IDs of precipitation raster which overlap with bounding box of sites + buffers
-cell_id_bbox <- cells(raster_ref_prec, vect(bbox_sf))
+cell_id_bbox <- cells(raster_ref_prec_proj, vect(bbox_sf))
 cell_ids <- as.vector(unlist(cell_id_bbox[,2]))
 
+
 ## 5.6.2 Create dataframe with distances between site points and cells within the bounding box of sites + buffers -------------- 
-# extract cell center from list of cell ids and from site cells:
-coords_cell_id <- terra::xyFromCell(raster_ref_prec, cell_ids)
+# extract cell center from list of cell ids:
+cell_id_coords <- terra::xyFromCell(raster_ref_prec_proj, cell_ids)
+
 # transform into sf object: 
-cell_id_sf <- st_as_sf(
-  data.frame(cell_id = cell_ids, coords_cell_id),
+# In sf umwandeln
+cell_sf <- st_as_sf(
+  data.frame(cell_id = cell_ids, cell_id_coords),
   coords = c("x", "y"),
-  crs = st_crs(sites_sf)
+  crs = st_crs(sites_proj)
 )
 
 #  create matrix with distances between site points and cell_id center points
-dist_matrix <- st_distance(cell_sf, sites_sf)  # Ergebnis: units-Matrix (m)
+dist_matrix <- st_distance(cell_sf, sites_proj)  # Ergebnis: units-Matrix (m)
 
 # transform matrix into dataframe
 dist_df <- as.data.frame(dist_matrix)
-colnames(dist_df) <- sites_sf$cell_id_sites
+colnames(dist_df) <- sites_proj$Trap
 dist_df$cell_id <- cell_sf$cell_id
 dist_df <- dist_df |> relocate(cell_id)
+#rownames(dist_df) <- cell_ids
 
-
-
-
-## 5.5.3 Loop through precipitation raster and extract precipitation value of the raster cell which is closest to the site point 
-
-# replacement steps:
-# A) define bounding box
-# B) determine, which raster cells are in the bounding box and create a data frame with their ID
-# C) Create a data frame that contains 96 columns (for each trap one) and the distance between all raster points and trap-raster cells
-#    (number of rows is equal the number of raster cells in the bounding box)
-# D) create a loop for each unique months (data file) that needs to be loaded. (only select months for which data is missing)
-# within the loop get a second for the unique hours within the data frame where we have missing data
-# E) Then create a third loop for each of the traps that has missing data for that hour.
-# F) In that loop look for the closets raster cell(s) in the bounding box that still contains data
-# G) add this value to the 'missing' data-frame at the right position
-
-
+## 5.6.3 Loop through precipitation raster and extract precipitation value of the raster cell which is closest to the site point 
 
 # dataframe with distances between site points and raster cells: dist_df 
 # dataframe with missing data: missing
@@ -641,7 +659,7 @@ unique.tar<-unique(missing$link_prec)
 
 # extract missing precipitation data
 missing.data.prec<-c()
-for(i in 42:length(unique.tar)){
+for(i in 1:length(unique.tar)){
   print(i)
   link <- paste0("hourly/radolan/reproc/2017_002/bin/", unique.tar[i])
   file <- dataDWD(link, base=gridbase, dir=tempdir, joinbf=TRUE, read=FALSE) 
@@ -654,57 +672,41 @@ for(i in 42:length(unique.tar)){
     layer <- rad$dat[[unique.layer[k]]]
     # assign CRS: 
     layer <- projectRasterDWD(layer,proj = "radolan")
-    
+
+    # check if layer only contains NA; if TRUE --> assign 0 as precipitation value
+    if(allNA(layer) == TRUE){
+      extracted2 <- data.frame(prec = 0,
+                             cellID_prec = unique.cells,
+                             raster_nr = rep(unique.layer[k], length(unique.cells)),
+                             link_prec = rep(unique.tar[i], length(unique.cells)))
+    }
+    else{
     selection2<- which(missing$link_prec==unique.tar[i] & missing$raster_nr==unique.layer[k])
     unique.cells<-unique(missing$cellID_prec[selection2])
     ## to do: check individual cells for closest neighbouring cell (using distance dataframe)
-    # loop through unique.cells: each cell within unique.cells has its own column within the distance matrix --> check the neighbouring cells for non-NA values
+        # before: - recalculate distance matrix (in there: change column names from traps to cellIds from the traps (--> fewer columns?))
+        #         - check again order of projection: first identify cellIDs, then project and calculate distance between cells?
+    # loop through unique.cells: each cell within unique.cells has its own column within the distance matrix --> check the neighboruing cells for non-NA values
     # bind to data.frame??? 
-    closest_prec <- c()
-    for (l in 1:length(unique.cells)){
-      cell_col <- paste0("",unique.cells[l],"")
-      buffer <- set_units(30000, "m")
-      
-      # sort neighbouring cells of unique.cells according to their distance to the respective unique.cell and remove all neigbouring cells witch a distance > buffer (30 km)
-      sorted_df <- dist_df %>%
-        select(cell_id, all_of(cell_col)) %>%
-        filter(.data[[cell_col]] <= buffer) %>%
-        arrange(.data[[cell_col]])
-      
-      closest_cells <- sorted_df$cell_id
-      
-      # get precipitation for all cells within bounding box:
-      extracted <-  (terra::extract(layer, closest_cells))
-      colnames(extracted) <- "prec"
-      # get non-NA precipitation of cell closest to site cell 
-      prec <- extracted$prec[which(!is.na(extracted$prec))[1]]
-      
-      closest_prec <- rbind(closest_prec, prec)
+    
+    
+    extracted <- data.frame(prec = (terra::extract(layer, unique.cells)),
+                           cellID_prec = unique.cells,
+                           raster_nr = rep(unique.layer[k], length(unique.cells)),
+                           link_prec = rep(unique.tar[i], length(unique.cells)))
+    colnames(extracted)[1]<-c('prec')
     }
-    
-    extracted <- data.frame(prec = closest_prec[,1],
-                            cellID_prec = unique.cells,
-                            raster_nr = rep(unique.layer[k], length(unique.cells)),
-                            link_prec = rep(unique.tar[i], length(unique.cells)))
-    
     
     missing.data.prec<-rbind(missing.data.prec, extracted)
   }
 }
 
-
-# check for duplicate rows: 
-sum(duplicated(missing.data.prec)) #--> 1287 duplicate rows_append()
-missing.data.prec <- missing.data.prec[!duplicated(missing.data.prec), ]
-
 # save data on extracted prec values
 write.csv(missing.data.prec,"analysis_bees_diversity/data/data_weather/missing.data.prec.csv", row.names = FALSE)
 
 
-## Check missing extracted precipitation data
-## check how many NAs still exist --> for these no neighbouring cells within 30 km had non-NA values -> set to 0
-
-missing.data.prec_NA <- which(is.na(missing.data.prec$prec)) # 2661 NAs
+# check for remaining NAs: 
+prec.NA <- which(is.na(missing.data.prec$prec)) 
 
 # replace missing precipitation values which cannot be replaced with neighbouring values within the 30km-buffer with 0
 missing.data.prec <- missing.data.prec %>% 
@@ -747,10 +749,12 @@ write.csv(all.dat.temp.prec,"analysis_bees_diversity/data/data_weather/all_dat_t
 
 
 ## 5.6 backtransform extracted temp and prec data ------------
+# note: temperature and precipitation raster have different cell IDs for the same Traps as though they have the same projection the raster extent is different 
 
 
 
-### next steps:
+
+
 #(iv) training data: run the selection procedure of best model constants (best settings for suitability approach)
 #(v) testing data: compare the two modelling approaches (exposure days vs. suitability scores), accounting 
 #     for co-linearity, non-linearity and different scales
@@ -776,4 +780,3 @@ write.csv(all.dat.temp.prec,"analysis_bees_diversity/data/data_weather/all_dat_t
 #     - other fixed effects (year, elevation, habitat diversity stuff??)
 #     - things we are truly interested in (season, suitability score and their interaction) 
 # test new
-

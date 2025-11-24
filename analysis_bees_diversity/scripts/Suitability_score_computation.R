@@ -23,9 +23,9 @@ rm(weather.data)
 
 # there are three constants in the formula that defines the suitability of temp for pollination
 # here, we define their range
-t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
-t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
-sigma <- seq(0.5,5, length=10) # defines the shape of the sigmodid shape of bee activity below t.opt
+t.opt <- seq(10,27, length=15) # optimal temperature - highest activity
+t.max <- seq(25,50, length=15) # maximal temperature - defines when activity becomes 0 
+sigma <- seq(0.5,8, length=12) # defines the shape of the sigmodid shape of bee activity below t.opt
 constants.grid<- expand.grid(t.opt, t.max, sigma)
 names(constants.grid) <- c("t.opt", "t.max", "sigma")
 
@@ -33,10 +33,12 @@ names(constants.grid) <- c("t.opt", "t.max", "sigma")
 constants.grid<- constants.grid[which(constants.grid$t.opt<=constants.grid$t.max-1),]
 rm(t.opt, t.max, sigma)
 
+
+#i = 50
+#j = 1339
+
 # create output data frame that will contain for each sample (column) all different suitability scores
 output<- c()
-i<-1
-j<-951
 
 # we create a procedure that will be implemented for each sampling period in a loop
 for (i in 1:length(input.data)){
@@ -45,7 +47,7 @@ for (i in 1:length(input.data)){
   placeholder<-  input.data[[i]]
   
   # this was for testing the code and see whether the relationships are correctly coded 
-  placeholder<- data.frame(temp=seq(0,35, length=1300), prec = sample(c(0,0,0,0,0),100, replace = T))
+  #placeholder<- data.frame(temp=seq(0,35, length=1300), prec = sample(c(0,0,0,0,0),100, replace = T))
   
   # prepare output data-frame for a given sampling period
   output.period<-c()
@@ -68,7 +70,7 @@ for (i in 1:length(input.data)){
     suitability.estimate[which(suitability.estimate<0)]<-0
     
     # diagnostics - works well
-    plot(suitability.estimate~placeholder$temp)
+    #plot(suitability.estimate~placeholder$temp)
     
     # output for each sampling period needs to be prepared and saved
     suitability.score<-sum(suitability.estimate)
@@ -106,11 +108,17 @@ for(i in 1:ncol(suitability.matrix)){
   print(i)
 }
 mod.output<-data.frame(AIC.with.interaction, AIC.without.interaction)
-mod.output<-mod.output[961:1920,]
 mod.output$min<-apply(mod.output,1,function(x){min(x)})
 
 best.constants<-which(mod.output$min==min(mod.output$min))
 #best.constants<-which(mod.output$AIC.without.interaction==min(mod.output$AIC.without.interaction))
+
+
+# --> currently (with t.opt <- seq(15,27, length=10) # optimal temperature - highest activity
+#                     t.max <- seq(25,45, length=10) # maximal temperature - defines when activity becomes 0 
+#                     sigma <- seq(0.5,5, length=10) 
+# : best constants: 951 -->    t.opt t.max sigma#
+#                       991    15    45     5
 
 constants.grid[best.constants,]
 interaction<-which(mod.output[best.constants,]==min(mod.output[best.constants,]) )[1]
@@ -125,6 +133,40 @@ if(interaction==1){
   best.suit.mod<-lmer(data= dat, 
               log.ab~ suitability.score + season + suitability.score:season +
                 (1|landscape/site)+(1|year), REML = T)}
+
+### START TEST 
+# version 2: change t.opt, t.max & sigma to: 
+#                     t.opt <- seq(10,27, length=15) # optimal temperature - highest activity
+#                     t.max <- seq(25,50, length=15) # maximal temperature - defines when activity becomes 0 
+#                     sigma <- seq(0.5,8, length=12) 
+
+mod.output_2<-data.frame(AIC.with.interaction, AIC.without.interaction)
+mod.output_2$min<-apply(mod.output_2,1,function(x){min(x)})
+
+best.constants_2<-which(mod.output_2$min==min(mod.output_2$min))
+#best.constants<-which(mod.output$AIC.without.interaction==min(mod.output$AIC.without.interaction))
+
+# : best constants_2: 1315 -->    t.opt      t.max   sigma#
+#                       1339   13.64286    50      3.909091
+
+constants.grid[best.constants_2,]
+interaction<-which(mod.output_2[best.constants_2,]==min(mod.output_2[best.constants_2,]) )[1]
+
+if(interaction==1){
+  dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,best.constants_2])
+  # without interaction effect
+  best.suit.mod_2<-lmer(data= dat, 
+                      log.ab~ suitability.score + season +  
+                        (1|landscape/site)+(1|year), REML = T)}else{
+                          dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,best.constants_2])
+                          best.suit.mod_2<-lmer(data= dat, 
+                                              log.ab~ suitability.score + season + suitability.score:season +
+                                                (1|landscape/site)+(1|year), REML = T)}
+
+summary(best.suit.mod_2)
+plot(best.suit.mod_2)
+
+### END TEST 
 
 
 ### 4. check whether suitability score is a better predictor of abundance than exposure days  -------
@@ -164,7 +206,6 @@ simulateResiduals(teststs, plot = T) # good model diagnostics...
 # reflect on the results
 # try to run a model with suitability score that has been normalised by exposure days
 # try to extend the constant matrix and see what happens
-
 
 
 

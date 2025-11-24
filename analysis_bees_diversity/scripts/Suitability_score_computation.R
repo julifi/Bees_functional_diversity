@@ -19,6 +19,32 @@ for(i in 1:nrow(meta.sample)){
 
 rm(weather.data)
 
+# 1.2 visualisation of relationships
+library(ggplot2)
+ggplot(data = meta.sample, aes(y = log(total.abundance), x = exposure, fill = as.factor(year), shape = landscape))+ geom_jitter(size = 2.5, width = 0.2) + theme_bw() +
+  scale_shape_manual(values= c(21:25,21))
+
+ggplot(data = meta.sample[which(meta.sample$season=='spring'),], aes(y = log(total.abundance), x = exposure, fill = as.factor(year), shape = landscape))+ 
+  geom_jitter(size = 2.5, width = 0.2) + theme_bw() +
+  scale_shape_manual(values= c(21:25,21))
+
+ggplot(data = meta.sample[which(meta.sample$season=='summer'),], aes(y = log(total.abundance), x = exposure, fill = as.factor(year), shape = landscape))+ 
+  geom_jitter(size = 2.5, width = 0.2) + theme_bw() +
+  scale_shape_manual(values= c(21:25,21))
+
+ggplot(data = meta.sample[which(meta.sample$season=='summer'),], aes(y = log(total.abundance), x = exposure, fill = as.factor(year), shape = landscape))+ 
+  geom_jitter(size = 2.5, width = 0.2) + theme_bw() +
+  scale_shape_manual(values= c(21:25,21)) + facet_wrap(~ landscape)
+
+ggplot(data = meta.sample[which(meta.sample$season=='spring'),], aes(y = log(total.abundance), x = exposure, fill = as.factor(year), shape = landscape))+ 
+  geom_jitter(size = 2.5, width = 0.2) + theme_bw() +
+  scale_shape_manual(values= c(21:25,21)) + facet_wrap(~ landscape + as.factor(year))
+
+# conclusion: at aggregated level, there is a lot of noise and no patterns can be seen
+# the higher the differentation across year, season and landscape, the more clearly an impact of exposure days is visible. 
+# Hence, it would probably be good to also account for exposure days in our models (and not only for season)
+
+
 # 2. compute suitability scores for wild-bee pollination for each sampling interval  -------
 
 # there are three constants in the formula that defines the suitability of temp for pollination
@@ -68,7 +94,7 @@ for (i in 1:length(input.data)){
     suitability.estimate[which(suitability.estimate<0)]<-0
     
     # diagnostics - works well
-    plot(suitability.estimate~placeholder$temp)
+    #plot(suitability.estimate~placeholder$temp)
     
     # output for each sampling period needs to be prepared and saved
     suitability.score<-sum(suitability.estimate)
@@ -83,16 +109,23 @@ rm(output.period, suitability.score, suitability.estimate, above.opt, below.opt,
 
 ### 3. determine the optimal constant combination for computing the suitability score  -------
 
-library(lme4); library(lmerTest)
+library(lme4); library(lmerTest);
 
 # we work with log abundance to make outliers less influential
 meta.sample$log.ab<-log(meta.sample$total.abundance+1)
+
+#determine testing and training data:
+set.seed(42)
+
+testing.ID<-sample(1:nrow(meta.sample), round(nrow(meta.sample)*0.2))
+training.data<- meta.sample[-testing.ID, ]
+testing.data<- meta.sample[testing.ID, ]
 
 AIC.with.interaction<-c()
 AIC.without.interaction<-c()
 
 for(i in 1:ncol(suitability.matrix)){
-  dat<-data.frame(meta.sample,suitability.score=suitability.matrix[,i])
+  dat<-data.frame(training.data, suitability.score=suitability.matrix[-testing.ID,i])
   # without interaction effect
   mod.1<-lmer(data= dat, 
               log.ab~ suitability.score + season +  
@@ -130,16 +163,18 @@ if(interaction==1){
 ### 4. check whether suitability score is a better predictor of abundance than exposure days  -------
 
 # determine what exposure days model is better
-mod.days<-lmer(data=meta.sample, 
+mod.days<-lmer(data=training.data, 
                log.ab ~ exposure + season +
               (1|landscape)+(1|year)+(1|site) , REML = T)
-mod.days2<-lmer(data= meta.sample, 
+mod.days2<-lmer(data= training.data, 
                 log.ab~ exposure + season + season:exposure + 
                  (1|landscape)+(1|year)+(1|site) , REML = T)
-mod.days3<-lmer(data= meta.sample, 
+mod.days3<-lmer(data= training.data, 
                 log.ab~ exposure + season:exposure + 
                   (1|landscape)+(1|year)+(1|site) , REML = T)
 AIC(mod.days, mod.days2, mod.days3, best.suit.mod)
+
+
 
 summary(best.suit.mod)
 plot(best.suit.mod)
@@ -160,14 +195,27 @@ teststs<-glmmTMB(total.abundance ~ exposure + season +
 summary(teststs)
 simulateResiduals(teststs, plot = T) # good model diagnostics...
 
-# To do: 
-# reflect on the results
-# try to run a model with suitability score that has been normalised by exposure days
-# try to extend the constant matrix and see what happens
 
-
-
-
+# Next steps
+# (0) Look through data from Mark to identify true negatives and add them to the data - then rerun ALL analysis
+# (1) get starting into the meta.sample data
+# (2) change the code in the model comparison so that the testing is used to compare models
+# (3) Change the function for the suitability score in a way that it has a plateau - but keep the old version of the code
+# (4) given that the effect of season is very strong, it might better to run two models - one for each season (to determine if this is really better)
+#     this means then also that the suitability score optimisation probably needs to run twice (?)
+# (5) include starting day as additional fixed effect predictor in the models
+# (6) rerun the model comparison and see what happens; check residuals
+# (7) try to run a model with suitability score that has been normalised by exposure days
+# (8) try to log-transform the nummeric predictor (suitability score/ exposure days): this assume that trap efficiency decreases when traps get fuller
+#     this really only a side point
+#       
+# (9) try to get the biomass data ready, so we can also run a biomass-optimsised model
+# (10) biomass model - what happens here in the model comparison?
+# (11) try to play around with exterem data points
+# (12)try to run a model with suitability score that has been normalised by exposure days
+# 
+# for later:
+# #   (11) Beim letzten Analyseschritt waers auch moeglich die Daten innerhalb eines Jahres zu rarefizieren. Dann koennte man sich auch z.b. das Verhaeltnis zwischen richness und abundance anschaun, und schaun, ob das durch das Rarefizieren klarer wird...
 
 
 
